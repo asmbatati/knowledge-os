@@ -1,0 +1,10 @@
+{
+	"id": "knowledge-os",
+	"name": "Knowledge OS",
+	"version": "1.0.0",
+	"minAppVersion": "1.13.2",
+	"description": "Study your learning road beside your notes: the Knowledge OS in a tab, its coach, checks and Teach, graded by your Claude or ChatGPT subscription, an API key or a local model.",
+	"author": "Abdulrahman S. Al-Batati",
+	"authorUrl": "https://github.com/asmbatati",
+	"isDesktopOnly": true
+}

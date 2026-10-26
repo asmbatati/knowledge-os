@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.local/
+dist/
+node_modules/
+obsidian-plugin/main.js
+obsidian-plugin/test/.build/
+tests/*-results-*.json

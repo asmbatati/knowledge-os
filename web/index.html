@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="{{LANG}}" data-lang="{{LANG}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="los-token" content="{{TOKEN}}">
+  <meta name="los-version" content="{{VERSION}}">
+  <title>Knowledge OS</title>
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+  <link rel="preload" href="/fonts/Cairo-Regular.woff" as="font" type="font/woff" crossorigin>
+  <link rel="stylesheet" href="/app/style.css">
+  <script src="/vendor/katex/katex.min.js" defer></script>
+  <script type="module" src="/app/main.js"></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#/today">Knowledge OS</a>
+    <nav class="tabs" aria-label="Pages">
+      <a href="#/explore" data-page="explore" data-i18n="nav.explore">Explore</a>
+      <a href="#/today" data-page="today" data-i18n="nav.today">Today</a>
+      <a href="#/courses" data-page="courses" data-i18n="nav.courses">Courses</a>
+      <a href="#/map" data-page="map" data-i18n="nav.map">Road map</a>
+      <a href="#/lab" data-page="lab" data-i18n="nav.lab">Lab</a>
+      <a href="#/teach" data-page="teach" data-i18n="nav.teach">Teach</a>
+      <a href="#/progress" data-page="progress" data-i18n="nav.progress">Progress</a>
+      <a href="#/focus" data-page="focus" data-i18n="nav.focus">Focus</a>
+      <a href="#/settings" data-page="settings" data-i18n="nav.settings">Settings</a>
+    </nav>
+    <div class="top-right">
+      <span id="timer-chip" class="chip" hidden></span>
+      <button id="lang-toggle" class="ghost" type="button" aria-label="Language">عربي</button>
+    </div>
+  </header>
+  <main id="page" tabindex="-1"><p class="muted" data-i18n="loading">Loading…</p></main>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

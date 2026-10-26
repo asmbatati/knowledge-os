@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  page:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: The page's pure modules
+        run: node --test tests/js/*.test.mjs
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: The server compiles
+        run: python -m compileall -q server.py los
+
+  obsidian-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: obsidian-plugin/package-lock.json
+      - name: Test, lint, build
+        working-directory: obsidian-plugin
+        run: |
+          npm ci
+          npm test
+          npm run lint
+          npm run build
+      - name: Root manifest matches the plugin's
+        run: diff <(jq -S . manifest.json) <(jq -S . obsidian-plugin/manifest.json)

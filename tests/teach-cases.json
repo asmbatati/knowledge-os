@@ -1,0 +1,446 @@
+{
+  "about": "Teaching sessions whose reviewer findings are known (the vault's Knowledge OS Design 2026-10, section 8). The reviewer is trusted only while it finds them: every habit in `habits` must be named, none in `not_habits` may be, `checked` must match, and `errors` says whether at least one error must be found (true) or none may be (false). Each case carries its note's teaching text (`note`: no frontmatter, no source or personal sections, no writing notes), taken from the owner's vault on 26 Oct 2026, so the test runs the same on any install. Eight sessions were added on 26 Oct 2026 on the owner's approval, making twelve.",
+  "cases": [
+    {
+      "id": "kalman-wrong-and-jargon",
+      "subject": "Kalman Filter",
+      "level": "first-year",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Kalman Filter. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "The Kalman filter is the optimal estimator for any system, linear or nonlinear, whatever the noise. You compute the Kalman gain from the covariance and the innovation, then you update."
+        ],
+        [
+          "student",
+          "What is covariance? And what is the innovation?"
+        ],
+        [
+          "teacher",
+          "They're standard terms. The gain weighs the innovation, and the covariance shrinks. That's basically it."
+        ],
+        [
+          "student",
+          "Why is it the best for any noise?"
+        ],
+        [
+          "teacher",
+          "Because it minimises the error. OK, that's the Kalman filter."
+        ]
+      ],
+      "habits": [
+        "error",
+        "jargon",
+        "no-example",
+        "no-check"
+      ],
+      "not_habits": [],
+      "checked": false,
+      "errors": true,
+      "note": "[[مرشح كالمان|AR]]|[[Kalman Filter|EN]]\n\n🏡 [[HOME]]\n\n~ **Same Level** [[Particle Filter]] | [[Bayesian Inference]] | [[SLAM]]\n~ **Child Notes** [[Extended Kalman Filter]] | [[Unscented Kalman Filter]] | [[Information Filter]]\n\n# Kalman Filter\n\n> [!abstract] Definition\n> The **Kalman filter** is the optimal recursive linear estimator for a state vector observed through noisy measurements, under the assumption that process and measurement noise are zero-mean Gaussian with known covariances and that the state dynamics and measurement equations are linear.\n\n## Definition\n\nA Kalman filter estimates the hidden state $\\mathbf{x}_k \\in \\mathbb{R}^n$ of a linear dynamical system\n\n$$\n\\mathbf{x}_k = F_k\\,\\mathbf{x}_{k-1} + B_k\\,\\mathbf{u}_k + \\mathbf{w}_k, \\qquad \\mathbf{w}_k \\sim \\mathcal{N}(\\mathbf{0}, Q_k)\n$$\n\nfrom noisy measurements\n\n$$\n\\mathbf{z}_k = H_k\\,\\mathbf{x}_k + \\mathbf{v}_k, \\qquad \\mathbf{v}_k \\sim \\mathcal{N}(\\mathbf{0}, R_k)\n$$\n\nwhere $F_k$ is the state-transition matrix, $H_k$ the measurement matrix, $Q_k$ and $R_k$ the process- and measurement-noise covariances, and $B_k\\mathbf{u}_k$ an optional control input.\n\n## Intuition\n\nThe Kalman filter blends two sources of information about the state at each step:\n\n1. A **prior** — what the dynamics predict the state should be, given the previous estimate.\n2. A **likelihood** — what the new measurement says the state must be.\n\nBoth come with uncertainty (covariances). The filter weighs them by their relative confidences and returns the **posterior** — the most probable state given both sources, plus a covariance that reflects the resulting uncertainty.\n\nThe remarkable result is that, for linear-Gaussian systems, this weighted blend is the **provably optimal** linear estimator in the mean-squared-error sense.\n\n## Mathematical Formulation\n\nThe filter alternates **predict** and **update** steps.\n\n### Predict\n\n$$\n\\begin{aligned}\n\\hat{\\mathbf{x}}_{k|k-1} &= F_k\\,\\hat{\\mathbf{x}}_{k-1|k-1} + B_k\\,\\mathbf{u}_k \\\\\nP_{k|k-1} &= F_k\\,P_{k-1|k-1}\\,F_k^\\top + Q_k\n\\end{aligned}\n$$\n\n### Update\n\n$$\n\\begin{aligned}\n\\tilde{\\mathbf{y}}_k &= \\mathbf{z}_k - H_k\\,\\hat{\\mathbf{x}}_{k|k-1} & &\\text{(innovation)} \\\\\nS_k &= H_k\\,P_{k|k-1}\\,H_k^\\top + R_k & &\\text{(innovation covariance)} \\\\\nK_k &= P_{k|k-1}\\,H_k^\\top\\,S_k^{-1} & &\\text{(Kalman gain)} \\\\\n\\hat{\\mathbf{x}}_{k|k} &= \\hat{\\mathbf{x}}_{k|k-1} + K_k\\,\\tilde{\\mathbf{y}}_k & &\\text{(state update)} \\\\\nP_{k|k} &= (I - K_k H_k)\\,P_{k|k-1} & &\\text{(covariance update)}\n\\end{aligned}\n$$\n\nwhere:\n\n- $\\hat{\\mathbf{x}}_{k|k-1}$ is the prior state estimate at step $k$,\n- $\\hat{\\mathbf{x}}_{k|k}$ is the posterior state estimate at step $k$,\n- $P_{k|k-1}, P_{k|k}$ are the prior and posterior error covariances,\n- $\\tilde{\\mathbf{y}}_k$ is the **innovation** (residual between measurement and prediction),\n- $S_k$ is the innovation covariance,\n- $K_k$ is the **Kalman gain** — the optimal blending weight between prediction and measurement.\n\nWhen $R_k \\to 0$ (a very confident measurement), $K_k \\to P_{k|k-1} H_k^\\top \\left( H_k P_{k|k-1} H_k^\\top \\right)^{-1}$ for $H_k$ of full row rank — a right inverse of $H_k$, so $H_k K_k \\to I$ and the filter follows the measurement in every direction it observes. The limit is $H_k^{-1}$ only when $H_k$ is square and invertible.\nWhen $Q_k$ is small (very confident model), $K_k \\to 0$ and the filter trusts the prediction.\n\n## Diagram\n\n```mermaid\ngraph LR\n    Init[\"Initial estimate<br/>x̂₀, P₀\"] --> Predict\n    Predict[\"Predict<br/>x̂_{k|k-1}, P_{k|k-1}\"] --> Update\n    Z[\"Measurement z_k\"] --> Update\n    Update[\"Update<br/>x̂_{k|k}, P_{k|k}\"] --> Predict\n    Update --> Out[\"Posterior<br/>x̂_{k|k}, P_{k|k}\"]\n    class Predict,Update internal-link;\n```\n\n```mermaid\nstateDiagram-v2\n    [*] --> Predicting\n    Predicting --> Updating : measurement arrives\n    Updating --> Predicting : next step\n    Updating --> [*] : terminate\n```\n\n## Historical Development\n\n```mermaid\ntimeline\n    title Kalman Filter and Descendants\n    1960 : Kalman publishes \"A New Approach to Linear Filtering and Prediction Problems\"\n    1961 : Kalman-Bucy filter (continuous-time variant)\n    1969 : Used in Apollo guidance computer\n    1970s : Extended Kalman Filter for nonlinear systems\n    1997 : Unscented Kalman Filter (Julier, Uhlmann)\n    2000s : Wide adoption in SLAM and sensor fusion\n    2020s : Hybrid neural-Kalman architectures\n```\n\n## Applications\n\n- **Robotics**: sensor fusion (IMU + GPS + LiDAR), state estimation in [[SLAM]], target tracking.\n- **Aerospace**: inertial navigation systems, attitude estimation, missile guidance, the Apollo program.\n- **Finance**: time-series filtering of noisy market data, state-space models in econometrics.\n- **Computer vision**: object tracking (linear motion models with measurement of bounding-box centroid).\n- **Signal processing**: speech enhancement, channel equalization.\n\n## Variants\n\n| Variant | When to use |\n|---|---|\n| [[Extended Kalman Filter]] (EKF) | Mildly nonlinear dynamics; linearize around current estimate. |\n| [[Unscented Kalman Filter]] (UKF) | Strongly nonlinear; uses sigma points instead of linearization. |\n| [[Information Filter]] | Sparse measurements; works in information form $\\Lambda = P^{-1}$. |\n| [[Particle Filter]] | Highly nonlinear or non-Gaussian; trades optimality for generality. |\n\n## Related Concepts\n\n- [[Bayesian Inference]] — the Kalman filter is the closed-form Bayesian update for linear-Gaussian systems.\n- [[SLAM]] — early SLAM (EKF-SLAM) was built on Kalman foundations.\n- [[State Space]] — the state-space formulation is the prerequisite.\n- [[Observability]] — determines whether a Kalman filter can recover the full state from outputs.\n\n## Related Debates\n\n- [[Is model-based control superior to learning-based]] — Kalman filters are the canonical model-based estimator; data-driven competitors include learned observers.\n- [[How robust is the Gaussian assumption in practice]] — when noise is heavy-tailed, the Kalman filter's optimality guarantee breaks down.\n\n## Open Questions\n\n> [!question] Tuning $Q$ and $R$ under partial observability\n> In practice, the process noise $Q$ and measurement noise $R$ are rarely known exactly. Adaptive Kalman filters estimate them online, but no universally accepted method exists.\n\n> [!question] Hybrid neural + Kalman architectures\n> Recent work (KalmanNet, KFNet) blends a neural backbone with Kalman recursion. Does this generalize across domains?\n"
+    },
+    {
+      "id": "ohm-well-taught",
+      "subject": "Ohm's law",
+      "level": "pupil",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Ohm's law. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "Think of water in a pipe. The pressure pushing the water is like voltage, the amount of water flowing each second is like current, and a narrow part of the pipe that slows the flow is like resistance. Ohm's law says that, for many materials, current equals voltage divided by resistance: I = V / R."
+        ],
+        [
+          "student",
+          "So more push gives more flow, and a narrower pipe gives less?"
+        ],
+        [
+          "teacher",
+          "Exactly. Example: a 9-volt battery across a 3-ohm resistor drives 9 / 3 = 3 amperes. Now you try: 12 volts across a 4-ohm resistor. What current?"
+        ],
+        [
+          "student",
+          "12 divided by 4... 3 amperes?"
+        ],
+        [
+          "teacher",
+          "Right. One warning: it is not true of everything. A light bulb's filament gets hotter as more current flows, its resistance rises, so doubling the voltage does not double the current. Ohm's law holds when the resistance stays the same. Can you say in your own words when it fails?"
+        ],
+        [
+          "student",
+          "When the thing's resistance changes, like when the bulb heats up."
+        ],
+        [
+          "teacher",
+          "Yes, that's it."
+        ]
+      ],
+      "habits": [],
+      "not_habits": [
+        "error",
+        "no-example",
+        "no-check",
+        "no-counterexample"
+      ],
+      "checked": true,
+      "errors": false,
+      "note": "# Ohm's law\n\n> [!abstract] In one sentence\n> In most conductors the current density follows the field, J = σE, so a wire of length l and cross-section A obeys V = I R with R = l/(σA), and turns the power I V = I² R into heat.\n"
+    },
+    {
+      "id": "moravec-bare-statement",
+      "subject": "Moravec's paradox",
+      "level": "engineer",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Moravec's paradox. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "Moravec's paradox: high-level reasoning needs very little computation, but low-level sensorimotor skills need enormous computational resources. Moravec wrote it down in 1988. That's the paradox; next topic."
+        ]
+      ],
+      "habits": [
+        "no-example",
+        "no-check"
+      ],
+      "not_habits": [
+        "error"
+      ],
+      "checked": false,
+      "errors": false,
+      "note": "# Moravec's paradox\n\n> [!abstract] In one sentence\n> The things humans find hard — chess, calculus, strategy — turned out to be easy for machines; the things a toddler does effortlessly — grasping, walking, seeing — turned out to be extraordinarily hard.\n\n## Why it exists\nFormulated by Hans Moravec at CMU in 1988. It is the single best explanation for why robotics lagged so far behind the rest of AI, and why an AI that can pass a law exam still cannot reliably pick up a mug.\n\n## The statement\n$$\\underbrace{\\text{Abstract reasoning}}_{\\text{hard for humans}} \\;\\Longrightarrow\\; \\text{easy for AI}$$\n$$\\underbrace{\\text{Sensorimotor skill}}_{\\text{effortless for humans}} \\;\\Longrightarrow\\; \\textbf{very hard for AI}$$\n\n| Task | Human effort | AI status |\n|---|---|---|\n| Play grandmaster chess | years of study | **solved 1997** (Deep Blue) |\n| Prove a theorem | expert-level | strong today |\n| Play Go at superhuman level | a lifetime | **solved 2016** (AlphaGo) |\n| **Pick up an unfamiliar mug** | a 2-year-old does it | **still unreliable** |\n| **Walk over uneven ground** | automatic | hard, brittle |\n| **Fold laundry** | trivial, boring | a research frontier |\n\n## Worked example — the lecture's own mug\nThe lecturer's PR2 robot at Freiburg, 2019, attempting to grasp a mug:\n\n```\npoint cloud observation\n   → analytical grasp pose estimation\n      → close gripper\n         → the mug SNAPS IN TWO\n```\n\nGrasping too hard is not a coding bug. It is the absence of an intuition every human has and none of us can articulate: *how much force does this object tolerate?* You know it from the object's look, its material, a lifetime of handling ceramics — knowledge you never consciously learned and cannot write down.\n\n**Contrast, on the same slide:** an orangutan learns to use a tool **by watching another orangutan once**. No reward function, no dataset, no gradient steps.\n\n## Why the paradox is true — the evolutionary argument\nMoravec's own explanation is about how long each capability has been under optimisation:\n\n| Capability | Age | Optimisation |\n|---|---|---|\n| Vision, balance, manipulation | **~500 million years** | relentlessly refined by evolution |\n| Abstract symbolic reasoning | **~50,000 years** | barely optimised at all |\n\nSensorimotor skill *feels* effortless precisely **because** it is so heavily optimised — the enormous computation is hidden below conscious access. Chess feels hard because we are running it on hardware that was never designed for it, badly.\n\n**The engineering consequence:** the capabilities that feel effortless are the ones you have no introspective access to, so they are exactly the ones you cannot hand-code.\n\n## The data version of the paradox — this is the one that matters now\n$$\\text{Chess} \\Rightarrow \\text{rules are writable, self-play generates infinite data}$$\n$$\\text{Grasping} \\Rightarrow \\text{no rules, and } \\textbf{the internet contains no grasp data}$$\n\nYou can scrape billions of words about mugs. You cannot scrape the **force profile of a hand closing on one**. Every such data point must be physically produced, in real time, by a real robot or a human teleoperating one.\n\n**Moravec's paradox in 2026 is largely a data problem** — see [[Why robot data is scarce]].\n\n## Where it shows up\n- **The whole motivation for this course.** If sensorimotor skill were easy, robot learning would not need to exist.\n- **Why LLMs did not solve robotics.** GPT-class models are superb at the easy half of the paradox and have no purchase on the hard half — hence [[What counts as a robot]].\n- **Why [[Imitation learning]] is so attractive.** If you cannot *write down* the skill, copy someone doing it. The orangutan's strategy.\n\n## Pitfalls\n- **It is not a law of nature.** It is an observation about where progress has been, and it is being eroded — the point of this whole field.\n- **Don't read it as \"robots are dumb\".** Boston Dynamics' hardware is astonishing. The gap is in *general, robust* sensorimotor competence, not in peak performance on a rehearsed routine.\n- **The inverse trap:** assuming that because a model reasons well it must act well. Reasoning and acting are the two halves of the paradox, and they are largely independent.\n\n## Connects to\n- **Before:** [[Sense-plan-act and the closed-world assumption]]\n- **Explains:** [[Why robot data is scarce]] · [[Why we do not have home robots yet]]\n- **Motivates:** [[Imitation learning]] · [[Robot learning - solving robotics via machine learning]]\n"
+    },
+    {
+      "id": "gettier-backwards",
+      "subject": "Gettier Problem",
+      "level": "first-year",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Gettier Problem. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "In 1963 Edmund Gettier proved that knowledge is exactly justified true belief: if you believe something true and you have a justification, you know it. That settled the question of what knowledge is."
+        ],
+        [
+          "student",
+          "So any true belief with a reason counts as knowledge?"
+        ],
+        [
+          "teacher",
+          "Yes, that's what Gettier showed."
+        ]
+      ],
+      "habits": [
+        "error"
+      ],
+      "not_habits": [],
+      "checked": false,
+      "errors": true,
+      "note": "# Gettier Problem\n\n> [!abstract] In one sentence\n> Edmund Gettier showed in 1963 that a belief can be true and justified and still not be knowledge, because it is true by luck; since\n> then the analysis of knowledge has been the search for what must be added to justified true belief, or a case that nothing can be.\n\n## Why it exists\n\nThe classical analysis, traced to Plato's *Theaetetus*, says knowledge is **justified true belief**:\n\n$$\nK(S,p) \\iff p \\;\\wedge\\; B(S,p) \\;\\wedge\\; J(S,p)\n$$\n\nGettier's three-page paper gave cases where the right side holds and the left does not. A counter-example teaches the limit of a\ndefinition, and this one reshaped analytic epistemology.\n\n## Gettier's cases\n\n**Case I.** Smith and Jones apply for a job. Smith has strong evidence that Jones will get it and that Jones has ten coins in his\npocket, so he infers *the man who will get the job has ten coins in his pocket*. In fact Smith gets the job, and Smith, unknowingly,\nalso has ten coins. His belief is true and justified, yet he does not know it: what made it true is not what justified it.\n\n**Case II.** Smith has good evidence that Jones owns a Ford, and infers by logic *Jones owns a Ford, or Brown is in Barcelona*, with no\nidea where Brown is. Jones does not own a Ford; by coincidence Brown is in Barcelona.\n\nRussell's **stopped clock** (1948) is an earlier case of the same shape.\n\n## The responses\n\n| Response | Added condition | Its trouble |\n|---|---|---|\n| **No false lemmas** | the belief is not inferred from a falsehood | cases exist without any false inference (the stopped clock) |\n| **Defeasibility** | no truth would defeat the justification if known | defining which truths count |\n| **Causal theory** (Goldman, 1967) | the fact causes the belief in the right way | knowledge of general and mathematical facts |\n| **Sensitivity** (Nozick, 1981) | if $p$ were false, $S$ would not believe it | it gives up closure: one can know one has hands without knowing one is not a brain in a vat |\n| **Safety** (Sosa, Williamson) | in nearby situations, $S$ would not easily believe falsely | defining *nearby* |\n| **Virtue** (Sosa, Zagzebski) | the belief is true *because of* the knower's competence | stating *because of* without luck sneaking back |\n| **Knowledge first** (Williamson, 2000) | none: knowledge is basic and not analysable | it gives up the project of analysis |\n\nZagzebski argued (1994) that **Gettier problems are inescapable** for any analysis in which justification can fall short of truth: take\na justified false belief, add luck that makes it true, and a new case appears.\n\n## Worked example\n\n**Given:** a robot's localisation reports *I am in the corridor*, from a map match that is wrong; by chance the robot is in a corridor\nof identical layout one floor up.\n\n**Step 1.** Belief: the state estimate says corridor. Truth: it is in a corridor. Justification: a high-confidence scan match.\n**Step 2.** Yet the match is to the wrong corridor: the estimate is right by luck, and the robot's next turn will be wrong.\n**Step 3.** A *safety* test catches it: in a nearby situation (one metre on), the same method would give a false position.\n\n**Answer:** a Gettier case in a robot. Engineering asks for more than a right answer: a method that would not easily be wrong.\n\n## Connects to\n\n- **Related:** [[Reliabilism]] · [[Virtue Epistemology]] · [[Where does the chain of justification stop]]\n- **People:** [[Edmund Gettier]] · [[Bertrand Russell]] · [[Alvin Goldman]] · [[Ernest Sosa]] · [[Linda Zagzebski]] ·\n  [[Timothy Williamson]]\n"
+    },
+    {
+      "id": "pid-well-taught",
+      "subject": "PID Control",
+      "level": "engineer",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about PID Control. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "Picture a car's cruise control. It reads the speed, compares it with the speed you set, and opens or closes the throttle. The gap between the two is the error, and a PID controller sets the throttle from three terms: one proportional to the error now (P), one to the error added up over time (I), and one to how fast the error is changing (D)."
+        ],
+        [
+          "student",
+          "Why three? Isn't pushing harder when you're further off enough?"
+        ],
+        [
+          "teacher",
+          "On flat road, nearly. Say you set 100 km/h, you're at 90, and the P gain is 0.5 % throttle per km/h: P asks for 5 % more throttle. Now drive up a long hill. The hill needs a steady extra throttle, and P only gives throttle while there is an error, so the car settles a little below 100, at whatever error makes P's push equal the hill's pull. That leftover gap is steady-state error. The I term keeps adding the error up while it lasts, so it grows until the gap is gone. D reacts to how fast the speed is changing and damps overshoot when you near the target."
+        ],
+        [
+          "student",
+          "So I is what fixes the hill."
+        ],
+        [
+          "teacher",
+          "Yes. Check yourself: with P alone, if the hill gets steeper, does the car settle further below 100 or closer?"
+        ],
+        [
+          "student",
+          "Further below, because P needs a bigger error to push harder against a steeper hill."
+        ],
+        [
+          "teacher",
+          "Exactly right."
+        ]
+      ],
+      "habits": [],
+      "not_habits": [
+        "error",
+        "no-example",
+        "no-check",
+        "no-intuition"
+      ],
+      "checked": true,
+      "errors": false,
+      "note": "🏡 [[HOME]]\n\n[[التحكم التناسبي التكاملي التفاضلي|AR]]|[[PID Control|EN]]\n\n~ **Same Level** [[State Space]] | [[Stability]] | [[Model Predictive Control]] | [[Optimal Control]]\n\n# PID Control (Proportional-Integral-Derivative)\n\n## Definition\n\n**PID Control** is the **simplest, most widely-deployed feedback control algorithm in industry** — it computes the control input as a weighted sum of three terms based on the error $e(t) = r(t) - y(t)$ (reference minus measured output):\n\n- **Proportional ($K_p$)** — react to current error.\n- **Integral ($K_i$)** — eliminate steady-state error by integrating accumulated error.\n- **Derivative ($K_d$)** — react to error trend by differentiating the error.\n\nThe PID formula:\n\n$$\nu(t) = K_p\\,e(t) + K_i\\int_0^t e(\\tau)\\,d\\tau + K_d\\,\\dot{e}(t)\n$$\n\nPID's origins go back to **Nicolas Minorsky's 1922 ship-steering paper** + Taylor Instruments' commercial PID products in the 1930s-1940s. Despite a century of more sophisticated alternatives, PID remains **the dominant industrial controller** (~95% of industrial control loops, by some estimates) for one simple reason: **it works without a model**.\n\nThe 1-line summary: **PID is \"the controller everyone learns first and most people deploy in production\" — model-free, simple, surprisingly robust.**\n\n## Why PID dominates industry\n\n1. **Model-free.** You don't need a state-space model — just a sensor, an actuator, and three tuning knobs.\n2. **Simple to implement.** ~20 lines of code in any language. Runs on the smallest microcontrollers.\n3. **Tuning intuition transfers.** Industrial engineers can hand-tune by feel after some experience.\n4. **Stable under loop-closure** for many practical SISO plants.\n5. **Failure modes are well-understood.**\n\nThe trade-off: PID **cannot natively handle constraints, MIMO coupling, or nonlinear preview** — that's where [[Model Predictive Control]] and [[Optimal Control]] step in.\n\n## The three terms — intuition\n\n```mermaid\ngraph LR\n    R[Reference r] --> S[Sum: e = r - y]\n    Y[Measured y] --> S\n    S --> P[K_p · e]\n    S --> I[K_i ∫e dt]\n    S --> D[K_d · de/dt]\n    P --> U[Sum: u]\n    I --> U\n    D --> U\n    U --> PL[Plant]\n    PL --> Y\n    class P,I,D,U internal-link\n```\n\n| Term | What it does | Failure mode if too high |\n|---|---|---|\n| **P (Proportional)** | Push harder when error is bigger | Oscillation, overshoot |\n| **I (Integral)** | Keep pushing until error vanishes | Integrator windup, sluggishness |\n| **D (Derivative)** | Anticipate where error is going | Noise amplification, chattering |\n\n## Discrete-time implementation\n\nMost digital PID controllers use the position-form or velocity-form discretization:\n\n### Position form\n\n$$\nu_k = K_p\\,e_k + K_i \\sum_{j=0}^{k} e_j \\Delta t + K_d\\,\\frac{e_k - e_{k-1}}{\\Delta t}\n$$\n\n### Velocity form (incremental)\n\n$$\n\\Delta u_k = u_k - u_{k-1} = K_p(e_k - e_{k-1}) + K_i e_k \\Delta t + K_d \\frac{e_k - 2e_{k-1} + e_{k-2}}{\\Delta t}\n$$\n\nThe velocity form avoids integrator windup more naturally and is preferred for \"bumpless transfer\" between manual and automatic modes.\n\n## Tuning methods\n\n| Method | Approach |\n|---|---|\n| **Ziegler-Nichols (1942)** | Increase $K_p$ until sustained oscillation → measure period → use formulas |\n| **Cohen-Coon** | Step response identification → analytical gains |\n| **Lambda tuning** | Target closed-loop time constant |\n| **IMC (Internal Model Control)** | Model-based tuning when a model exists |\n| **Hand-tuning by feel** | Industrial standard — experience-driven |\n| **Auto-tuning** | Vendor-specific algorithms (DCS PLCs) |\n| **AI / RL-tuned PID** | Recent: ML proposes gains; some 2024-2026 corpus posts |\n| **Twiddle / SGD** | Self-Driving Car students' favorite — random + gradient search |\n\n### Ziegler-Nichols (classic)\n\n| Controller | $K_p$ | $K_i$ (or $T_i$) | $K_d$ (or $T_d$) |\n|---|---|---|---|\n| P | $0.5 K_u$ | — | — |\n| PI | $0.45 K_u$ | $T_u/1.2$ | — |\n| PID | $0.6 K_u$ | $T_u/2$ | $T_u/8$ |\n\nwhere $K_u$ = ultimate gain (causing oscillation), $T_u$ = ultimate period.\n\n## Practical engineering additions\n\n| Addition | Purpose |\n|---|---|\n| **Anti-windup** | Stop integrating when actuator saturates |\n| **Derivative on measurement** | Avoid derivative kick from step changes in reference |\n| **Filtered derivative** | Low-pass on $D$ term to reduce noise amplification |\n| **Setpoint weighting** | Different gains for setpoint vs disturbance response |\n| **Bumpless mode transfer** | Smooth manual → auto switch |\n| **Gain scheduling** | Different gains in different operating regions |\n| **Feedforward + PID** | Add a model-based feedforward to a PID feedback |\n| **Cascade PID** | Inner loop (fast, e.g., motor torque) inside outer loop (slow, e.g., position) |\n\n## PID in robotics\n\n| Application | Use |\n|---|---|\n| **Motor velocity / torque control** | Almost always cascaded PID (or PI) inside |\n| **Joint position control** | Position-loop PID outside velocity-loop PI |\n| **Quadcopter attitude control** | PID on roll/pitch/yaw rates (PX4, ArduPilot use this) |\n| **Quadcopter altitude / position** | PID outer loop above attitude PID |\n| **Drone PID hovering** | Standard intro project |\n| **Robot arm low-level joint control** | PID at the joint level under any higher controller |\n| **Industrial process control** | The DCS world is PID-everywhere |\n| **Self-driving cross-track error** | PID on lateral error → steering angle |\n| **Differential drive robots** | PID on left/right wheel velocities |\n\n## Where PID is wrong\n\n| Problem | Better than PID |\n|---|---|\n| **Constrained MIMO with preview** | [[Model Predictive Control]] |\n| **Strong nonlinearity** | Feedback linearization, sliding mode, gain scheduling |\n| **Multi-rate / multi-loop interactions** | LQR, $H_\\infty$ |\n| **Time delays / dead-time** | Smith predictor, IMC, MPC |\n| **Optimal trajectory tracking** | [[Optimal Control]] / iLQR / DDP |\n| **Disturbance preview** | Feedforward + MPC |\n| **Contact-rich manipulation** | Impedance + [[Diffusion Policy]] / [[VLA Models]] |\n\n## PID and modern ML\n\nCounterintuitively, PID is still relevant in 2025-2026:\n\n- **Inner loop of every RL-trained humanoid** — RL produces high-level commands; PID-like joint controllers execute them.\n- **VLA action smoothing** — many VLA outputs are filtered through low-pass / PID-like dynamics.\n- **Quadcopter SITL** — PX4 + ArduPilot still use PID for attitude.\n- **Tesla FSD low-level controllers** — believed to still use PID for steering / brake.\n\nThe pattern: **learned policy at the top → classical PID at the bottom.**\n\n## Canonical references\n\n| Reference | Use |\n|---|---|\n| **Åström & Hägglund — PID Controllers: Theory, Design, and Tuning** | The textbook |\n| **Bequette — Process Control: Modeling, Design, and Simulation** | Practical |\n| **Ziegler-Nichols 1942 paper** | Historical origin |\n| **PX4 / ArduPilot source code** | Real-world PID examples |\n| **Steve Brunton Control Bootcamp** | Video intro to PID |\n| **MIT 2.004 / 2.14** | Undergraduate intro courses |\n\n## Notable corpus references\n\n- **Steve Brunton** — Control Bootcamp PID modules.\n- **PX4 + ArduPilot autopilot** community posts.\n- **Industrial process control** posts.\n- **PID-tuning AI / ML papers** — 2024-2026 work proposing LLM-tuned PID.\n- **Self-Driving Car Nanodegree (Udacity)** — PID labs.\n\n## Related\n\n- [[State Space]] · [[Stability]] · [[Model Predictive Control]] · [[Optimal Control]] · [[Reinforcement Learning]] · [[Sim-to-Real Transfer]] · [[Control Theory]] · [[UAV]] · [[Robotic Arms]] · [[Autonomous Driving]] · [[Humanoid Robotics]]\n"
+    },
+    {
+      "id": "derivative-wrong",
+      "subject": "Derivative",
+      "level": "pupil",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Derivative. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "A derivative tells you how steep a curve is. For example, the derivative of x squared is just x: the curve gets steeper as x grows."
+        ],
+        [
+          "student",
+          "So at x = 3 the steepness is 3?"
+        ],
+        [
+          "teacher",
+          "Yes. And another way to see it: the derivative is the area under the curve, added up from zero."
+        ],
+        [
+          "student",
+          "OK."
+        ]
+      ],
+      "habits": [
+        "error"
+      ],
+      "not_habits": [],
+      "checked": false,
+      "errors": true,
+      "note": "# Derivative\n\n> [!abstract] In one sentence\n> f′(a) = lim h→0 (f(a + h) − f(a))/h: the slope of the tangent line, the rate of change at a single point.\n\n## Why it exists\n\nAn average rate over an interval is easy: change divided by time. But a speedometer, the steepness of a road at one\nspot and the sensitivity of a cost to one parameter are rates at a single point, where the interval has shrunk to\nnothing. The derivative is that rate, found as the limit of average rates. Velocity, optimisation, control and the\ntraining of neural networks all run on it.\n\n## Definition\n\n$$f'(a) = \\lim_{h \\to 0} \\frac{f(a + h) - f(a)}{h},$$\nwhen the limit exists, and $f$ is then **differentiable** at $a$. The quotient is the slope of the secant line through\n$(a, f(a))$ and $(a + h, f(a + h))$. As $h$ shrinks the secant turns into the **tangent line**,\n$y = f(a) + f'(a)\\,(x - a)$, the straight line that best matches $f$ near $a$. Taken at every point, the derivative\nis itself a function, written $f'$ or $\\dfrac{df}{dx}$, in the units of $f$ per unit of $x$.\n\n## Worked example\n\n**Given:** a dropped object has fallen $s(t) = 4.9\\,t^2$ metres after $t$ seconds. How fast is the distance growing at\n$t = 3$ s?\n\n**Step 1.** Average rates over shrinking intervals: $\\dfrac{s(3.1) - s(3)}{0.1} = \\dfrac{47.089 - 44.1}{0.1} = 29.89$\nm/s, and $\\dfrac{s(3.01) - s(3)}{0.01} = 29.449$ m/s.\n\n**Step 2.** The limit, by algebra:\n$$\\frac{4.9\\,(3 + h)^2 - 4.9 \\cdot 9}{h} = \\frac{4.9\\,(6h + h^2)}{h} = 4.9\\,(6 + h) \\;\\to\\; 29.4.$$\n\n**Step 3.** The tangent line at $t = 3$ is $y = 44.1 + 29.4\\,(t - 3)$. At $t = 3.1$ it gives 47.04 m, against the true\n47.089 m.\n\n**Step 4.** The same algebra at any $t$ gives $s'(t) = 9.8\\,t$.\n\n**Answer:** 29.4 m/s at $t = 3$ s, and $s'(t) = 9.8\\,t$ in general.\n\n## Pitfalls\n\n- One small $h$ gives an approximation, not the derivative: $h = 0.1$ gave 29.89, not 29.4.\n- A function can be continuous without a derivative. $|x|$ has slope $-1$ to the left of 0 and $+1$ to the right, so\n  at the corner the limit does not exist.\n- A derivative has units. Metres per second here: a rate is only meaningful with them.\n\n## Connects to\n\n- **Before:** [[Limit]] · [[Rate of change (slope)]]\n- **After:** [[Differentiation rules]] · [[Partial derivative]] · [[Velocity]]\n"
+    },
+    {
+      "id": "resonance-jargon",
+      "subject": "Resonance Frequency",
+      "level": "pupil",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Resonance Frequency. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "Take the homogeneous solution of the undamped second-order ODE m x'' + k x = 0. Its eigenvalues are purely imaginary, at plus or minus j times omega_n, with omega_n = sqrt(k/m). Forcing the system at omega_n puts the input on the poles, so with zero damping the forced response grows without bound."
+        ],
+        [
+          "student",
+          "What's an ODE? And what does 'on the poles' mean?"
+        ],
+        [
+          "teacher",
+          "An ordinary differential equation. The poles are the roots of the characteristic polynomial. That's resonance."
+        ]
+      ],
+      "habits": [
+        "jargon",
+        "no-example"
+      ],
+      "not_habits": [
+        "error"
+      ],
+      "checked": false,
+      "errors": false,
+      "note": "🏡 [[HOME]]\n\n> [!abstract] In one sentence\n> Driven by a periodic force, a lightly damped system responds most strongly near its natural frequency: the\n> displacement peaks at $\\omega_r = \\omega_n\\sqrt{1 - 2\\zeta^2}$, and the lighter the damping, the higher and sharper\n> the peak.\n\n```figure\nid: shake-table\n```\n\n> [!example]- Still drawing\n> ![[shake-table.svg]]\n\n### What is it?\nResonance frequency is the frequency at which a system’s response amplitude reaches a maximum when driven by an external periodic force.\n\n---\n### Key Concept\n- At resonance, the forcing frequency matches the system’s **natural frequency**.\n- In an **ideal (no damping)** system, the amplitude would grow without bound.\n- In a **real (damped)** system, amplitude is large but finite.\n\n---\n### Mechanical Example\nFor a mass–spring system with external force $F(t) = F_0\\cos(\\omega t)$:\nThe amplitude of steady-state vibration peaks when\n$$\\omega \\approx \\omega_n = \\sqrt{\\tfrac{k}{m}}$$\n\n---\n### Worked example\n\n**Given:** a 2 kg mass on an 800 N/m spring ($\\omega_n = 20$ rad/s) with damping ratio $\\zeta = 0.1$, driven by $F_0\\cos(\\omega t)$.\n\n**Step 1 — where the peak is.** $\\omega_r = 20\\sqrt{1 - 2(0.1)^2} = 19.8$ rad/s, just below $\\omega_n$.\n\n**Step 2 — how high.** Relative to the static deflection $F_0/k$, the steady amplitude peaks at $1/(2\\zeta\\sqrt{1 - \\zeta^2}) = 1/(0.2 \\times 0.995) = 5.03$: five times the static deflection.\n\n**Step 3 — less damping.** As $\\zeta \\to 0$ the peak moves to $\\omega_n$ and grows without bound; at $\\zeta = 0.01$ it is already 50.\n\n---\n### Electrical Example\nFor an LC circuit:\n\n$$\\omega_0 = \\frac{1}{\\sqrt{LC}}, \\qquad f_0 = \\frac{1}{2\\pi\\sqrt{LC}}$$\n\n---\n### Connections\n- Related: [[Natural Frequency of a Mass–Spring System]]\n- Applications: radio tuning, bridge oscillations, musical instruments, machine vibration analysis.\n\n### Recent corpus additions (Jun 2026 — J3 batch)\n\n- **Physical pendulum sweet-spot + TMD framing** (Mario Pinheiro) — Conjugate-point property + Tuned Mass Damper application directly relevant to natural-frequency placement.\n"
+    },
+    {
+      "id": "torque-no-check",
+      "subject": "Torque",
+      "level": "first-year",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Torque. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "Torque is the turning effect of a force about a point. It is the force times its lever arm, the perpendicular distance from the point to the force's line: tau = r F sin(theta), where theta is the angle between the arm and the force."
+        ],
+        [
+          "student",
+          "Like using a wrench?"
+        ],
+        [
+          "teacher",
+          "Exactly a wrench. Push 50 newtons at right angles to a 0.3-metre wrench and the torque on the bolt is 0.3 times 50, 15 newton-metres. Push at 30 degrees to the wrench instead and sin 30 is a half, so you get 7.5 newton-metres for the same effort. That is why a longer wrench, or a push at right angles, turns a stuck bolt. That's torque."
+        ]
+      ],
+      "habits": [
+        "no-check"
+      ],
+      "not_habits": [
+        "error",
+        "no-example"
+      ],
+      "checked": false,
+      "errors": false,
+      "note": "# Torque\n\n> [!abstract] In one sentence\n> τ = r × F: the turning effect of a force about a point, larger the farther from it the force acts.\n"
+    },
+    {
+      "id": "fourier-wrong",
+      "subject": "Fourier transform",
+      "level": "first-year",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Fourier transform. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "The Fourier transform breaks a signal into sine waves of different frequencies and tells you how much of each is there. Play a chord on a piano, record it, and its transform shows three sharp peaks, one at each note's frequency."
+        ],
+        [
+          "student",
+          "Does it work for any sound?"
+        ],
+        [
+          "teacher",
+          "Only for periodic signals, ones that repeat forever. A single clap or one short pulse has no Fourier transform; for those you need a different tool."
+        ],
+        [
+          "student",
+          "Oh, OK."
+        ]
+      ],
+      "habits": [
+        "error"
+      ],
+      "not_habits": [
+        "no-example"
+      ],
+      "checked": false,
+      "errors": true,
+      "note": "# Fourier transform\n\n> [!abstract] In one sentence\n> f̃(k) = ∫ f(x) e^{−ikx} dx, with the inverse f(x) = ∫ f̃(k) e^{ikx} dk/2π, writes a function on the whole line as a continuous sum of waves: the Fourier series as its period grows without bound, with ∫ e^{ikx} dx = 2πδ(k); a narrow function has a wide transform, and a Gaussian transforms into a Gaussian.\n"
+    },
+    {
+      "id": "backprop-well-taught",
+      "subject": "Backpropagation",
+      "level": "first-year",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Backpropagation. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "A network is a chain of simple steps, and training needs to know how the loss changes when each weight changes. Backpropagation gets all of those at once by running the chain rule from the loss backwards, reusing each step's result for the steps before it."
+        ],
+        [
+          "student",
+          "Can you show me on something small?"
+        ],
+        [
+          "teacher",
+          "Take a tiny network: h = sigma(w1 x), then y = w2 h, and a loss L that depends on y. Going backwards: dL/dw2 = dL/dy times h. For w1 the change has to pass through w2 and through sigma: dL/dw1 = dL/dy times w2 times sigma'(w1 x) times x. The factor dL/dy is computed once and used for both."
+        ],
+        [
+          "student",
+          "So each layer's gradient carries the layers after it."
+        ],
+        [
+          "teacher",
+          "Right. Check yourself: if w2 were exactly zero, what would the gradient for w1 be, and why?"
+        ],
+        [
+          "student",
+          "Zero, because w2 multiplies everything in dL/dw1: nothing reaches w1 through it."
+        ],
+        [
+          "teacher",
+          "Exactly."
+        ]
+      ],
+      "habits": [],
+      "not_habits": [
+        "error",
+        "no-check",
+        "no-example"
+      ],
+      "checked": true,
+      "errors": false,
+      "note": "# Backpropagation\n\n> [!abstract] In one sentence\n> Computing the loss's gradient with respect to every weight in one backward pass: the chain rule applied layer by layer from the output, each layer reusing the gradient passed down from the one above, so all gradients cost about as much as one forward pass. For y = σ(wx) and loss (y − t)²/2, ∂L/∂w = (y − t) σ′(wx) x.\n"
+    },
+    {
+      "id": "belt-friction-wrong-checked",
+      "subject": "Belt friction",
+      "level": "engineer",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Belt friction. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "Wrap a rope round a fixed post and you can hold a heavy load with a light pull. On the point of slipping the two tensions obey T2 = T1 e^(mu beta), with beta the angle of wrap in radians and mu the friction coefficient. A bigger post grips better too, because the ratio grows with the drum's radius."
+        ],
+        [
+          "student",
+          "So a thicker post is always better?"
+        ],
+        [
+          "teacher",
+          "Yes. Try one: mu = 0.3 and half a turn, beta = pi. What is T2 over T1?"
+        ],
+        [
+          "student",
+          "e to the 0.3 pi, so e^0.94, about 2.6."
+        ],
+        [
+          "teacher",
+          "Right, about 2.57."
+        ]
+      ],
+      "habits": [
+        "error"
+      ],
+      "not_habits": [],
+      "checked": true,
+      "errors": true,
+      "note": "# Belt friction\n\n> [!abstract] In one sentence\n> A flat belt or rope wrapped through a contact angle β round a fixed drum, on the point of slipping, has tensions that grow exponentially with the angle, T₂ = T₁ e^{μβ} (T₂ the larger), from the equilibrium of each small arc, dT/dθ = μT; three turns of rope round a post with μ = 0.3 multiply the holding force by e^{1.8π} ≈ 286, and in a belt drive the torque transmitted is (T₂ − T₁) r.\n"
+    },
+    {
+      "id": "bayes-bare-statement",
+      "subject": "Conditional probability and Bayes rule",
+      "level": "engineer",
+      "turns": [
+        [
+          "student",
+          "Hi! I'm ready to learn about Conditional probability and Bayes rule. I don't know anything about it yet. Where do we start?"
+        ],
+        [
+          "teacher",
+          "Bayes' rule: P(A given B) equals P(B given A) times P(A), divided by P(B). It turns the probability of the evidence given a hypothesis into the probability of the hypothesis given the evidence. That's the rule; next topic."
+        ]
+      ],
+      "habits": [
+        "no-example",
+        "no-check"
+      ],
+      "not_habits": [
+        "error"
+      ],
+      "checked": false,
+      "errors": false,
+      "note": "# Conditional probability and Bayes rule\n\n> [!abstract] In one sentence\n> $P(A\\mid B)$ rescales the world so that $B$ is all that exists — and Bayes' rule reverses the conditioning, turning $P(\\text{data}\\mid\\text{cause})$ into $P(\\text{cause}\\mid\\text{data})$.\n\n**Rice §1.5** · the §1.5 Example C computer exercise\n\n## Definition\n$$P(A\\mid B) = \\frac{P(A\\cap B)}{P(B)}, \\qquad P(B) > 0$$\n\n**You are renormalising.** $B$ becomes the new sample space, and $P(A\\cap B)$ is divided by $P(B)$ so the new probabilities sum to 1.\n\n**Multiplication rule** (the same identity rearranged):\n$$P(A\\cap B) = P(A\\mid B)P(B) = P(B\\mid A)P(A)$$\n\n## Law of total probability\nIf $B_1,\\ldots,B_n$ **partition** $\\Omega$ (disjoint, exhaustive):\n$$P(A) = \\sum_{i} P(A\\mid B_i)\\,P(B_i)$$\n\n**Split by cases, weight by how likely each case is.** This is a [[Weighted mean]] of conditional probabilities.\n\n## Bayes' rule\n$$\\boxed{P(B_j\\mid A) = \\frac{P(A\\mid B_j)P(B_j)}{\\sum_i P(A\\mid B_i)P(B_i)}}$$\n\n| Piece | Name |\n|---|---|\n| $P(B_j)$ | **prior** — before seeing $A$ |\n| $P(A\\mid B_j)$ | **likelihood** — how well cause $j$ explains $A$ |\n| $P(B_j\\mid A)$ | **posterior** — after seeing $A$ |\n| denominator | evidence — the normaliser, by total probability |\n\n**This is [[Bayesian estimation]] in its simplest, finite form.** Same structure, discrete instead of continuous.\n\n## Worked example — the test that isn't\nA disease affects **1%** of the population. A test has **99% sensitivity** ($P(+\\mid D) = 0.99$) and **95% specificity** ($P(-\\mid D^c) = 0.95$).\n\n**You test positive. What is $P(D\\mid +)$?**\n\n**Step 1 — the two ways to test positive.**\n$$P(+) = \\underbrace{P(+\\mid D)P(D)}_{\\text{true positive}} + \\underbrace{P(+\\mid D^c)P(D^c)}_{\\text{false positive}}$$\n$$= (0.99)(0.01) + (0.05)(0.99) = 0.0099 + 0.0495 = 0.0594$$\n\n**Step 2 — Bayes.**\n$$P(D\\mid +) = \\frac{0.0099}{0.0594} = \\boxed{0.167}$$\n\n**Only 16.7%** — despite a test that is right 99% of the time on sick people.\n\n> [!important] Why the intuition fails\n> Look at the two terms in Step 1. The **false positives (0.0495) outnumber the true positives (0.0099) five to one**, purely because there are 99× more healthy people to generate them.\n>\n> **The base rate dominates.** $P(A\\mid B)$ and $P(B\\mid A)$ are different numbers, and confusing them is the *prosecutor's fallacy* — the same error as reading $p$-values backwards.\n>\n> **Change the prior to 10%** and $P(D\\mid+)$ jumps to $0.99(0.1)/(0.099+0.045) = 0.688$. Same test, different population, wildly different meaning. This is why screening programmes target high-prevalence groups.\n\n## Worked example — Monty Hall\nThree doors, one prize. You pick door 1. The host, **who knows where the prize is**, opens door 3 to reveal a goat. Switch to door 2?\n\n| | Stay | Switch |\n|---|---|---|\n| $P(\\text{win})$ | $1/3$ | $\\boxed{2/3}$ |\n\n**Why.** Your initial pick is right with probability $1/3$, and that does not change — the host was always going to open *some* goat door. So the remaining $2/3$ concentrates entirely on door 2.\n\n**By Bayes**, with $H_3$ = \"host opens 3\":\n$$P(H_3\\mid \\text{prize in }1) = \\tfrac12, \\qquad P(H_3\\mid\\text{prize in }2) = 1, \\qquad P(H_3\\mid\\text{prize in }3) = 0$$\n$$P(\\text{prize in }2\\mid H_3) = \\frac{1\\cdot\\frac13}{\\frac12\\cdot\\frac13 + 1\\cdot\\frac13 + 0} = \\frac{1/3}{1/2} = \\frac23 \\;✓$$\n\n**The host's knowledge is the whole content.** If he opened a door at random and it happened to show a goat, the answer would be $1/2$. **Conditioning on *how* the information arrived matters** — and simulating it is the fastest way to believe it.\n\n## Pitfalls\n- **$P(A\\mid B) \\ne P(B\\mid A)$.** The single biggest error in the chapter.\n- **Ignoring the base rate.**\n- **The partition must be exhaustive and disjoint** for total probability.\n- **$P(B) > 0$** is required.\n- Conditioning on *how* you learned something, not just *what* — Monty Hall.\n\n## Practise\n**Rice Ch. 1: 45, 46, 53, 54, 64, 68** *(US: 45, 46, 53, 54, **60**, 68)* · **the §1.5 Example C computer exercise** → [[ST121 Homework - Probability]]\n\n## Connects to\n- **Before:** [[Sample space, events and the axioms of probability]] · [[Counting methods]]\n- **After:** [[Independence of events]] · [[Conditional distributions and independence]]\n- **Grown up:** [[Bayesian estimation]] · [[Likelihood function]]\n"
+    }
+  ]
+}
