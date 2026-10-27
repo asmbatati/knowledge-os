@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from urllib.parse import quote
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +28,9 @@ class FakeCoach:
         self.prompts.append((system, prompt))
         if self.fail:
             raise RuntimeError("unreachable")
+        if "wrote one sentence, in their own words" in prompt:
+            return {"verdict": "partly", "fix": "Say that the last number said is how many there are.",
+                    "_cost_usd": 0.002}
         if "wants it explained more" in prompt:
             return {"text": "Think of handing out tickets, one number to each thing.", "source": "claude", "quote": "",
                     "_cost_usd": 0.005}
@@ -251,8 +255,16 @@ def group_coach(ctx) -> None:
         check("every answer is a practice row, and the stuck step a row of its own",
               len(prows) == 3 + len(d["chunks"]) and srows and srows[0]["to"] == "Collection")
         check("practice writes no verdict", verdict_files() == before)
+        h5 = coach3.history("Counting")
+        check("a concept's coaching history counts the steps taken, not the lessons written ahead",
+              h5 and h5["asked"] >= 3 and h5["right"] >= 1 and h5["missed"] and coach3.history("Nowhere") is None)
         sid5 = coach3.start("named", topic="Counting")["session"]
         l5 = coach3.step(sid5)["lesson"]
+        p5 = next((p for _s, p in reversed(llm.prompts) if 'Teach "Counting"' in p), "")
+        check("coached again, the next lesson is told what the last ones left and builds on it",
+              "coached on this before" in p5 and "missed the question" in p5 and "do not repeat" in p5)
+        check("a lesson for a concept never coached is not told so",
+              "coached on this before" not in next((p for _s, p in llm.prompts if 'Teach "Collection"' in p), ""))
         check("a choice that is no letter is refused", _refused(lambda: coach3.answer(sid5, l5, 1, "Z"), 400))
 
         # ---------------------------------------------------------------- Task 5: reflection, loops and the end
@@ -569,6 +581,10 @@ def group_coach(ctx) -> None:
             check("the reflection comes back", st == 200 and rf["grade"] == "shaky")
             st, _, _, e = cl.req("POST", "/api/coach/end", {"session": sid6})
             check("the end gives the next day", st == 200 and e["next_day"] == "2026-10-21")
+            st, _, _, cc = cl.req("GET", "/api/concept?name=" + quote(les["concept"] or "Counting"))
+            check("the concept page says it was coached: sessions, questions right, the teach-back's grade",
+                  st == 200 and cc["coached"] and cc["coached"]["sessions"] >= 1 and cc["coached"]["asked"] >= 1
+                  and cc["coached"]["grade"] == "shaky")
             st, _, _, _ = cl.req("POST", "/api/coach/step", {"session": sid6})
             check("an ended session is 404 over HTTP", st == 404)
             st, _, _, cd = cl.req("GET", "/api/coach/card?lang=en")
@@ -576,6 +592,20 @@ def group_coach(ctx) -> None:
             st, _, _, im = cl.req("POST", "/api/coach/import", {"text": cd["text"].replace(
                 "=== END OF CARD ===", "2026-10-21 | Counting | solid | the last number is the count | | \n=== END OF CARD ===")})
             check("and a card comes home over HTTP", st == 200 and im["rows"] == 1 and im["concepts"] == ["Counting"])
+            # In my words, checked before it is kept (26 Oct 2026)
+            st, _, _, wc = cl.req("POST", "/api/words/check", {"concept": "Counting", "text": "It tells how many.",
+                                                               "lang": "en"})
+            wrows = Ledger(vault6.learn).rows("words")
+            check("In my words is checked against the note: a verdict and what to fix, kept in the site's ledger only",
+                  st == 200 and wc["verdict"] == "partly" and wc["fix"] and wrows and wrows[-1]["verdict"] == "partly"
+                  and not (vault6.learn / "in-my-words.jsonl").exists())
+            st, _, _, _ = cl.req("POST", "/api/words/check", {"concept": "Counting", "text": ""})
+            check("an empty sentence is refused", st == 400)
+            app.coach.llm.state = (False, "quiet")
+            st, _, _, w0 = cl.req("POST", "/api/words/check", {"concept": "Counting", "text": "It tells how many."})
+            app.coach.llm.state = (True, "")
+            check("without a model it says so, and the sentence can still be kept", st == 200 and w0["verdict"] == ""
+                  and w0["why_code"] == "quiet")
         finally:
             srv.shutdown()
             srv.server_close()

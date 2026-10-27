@@ -11,6 +11,11 @@ subscription, an Anthropic, OpenAI, Gemini or OpenRouter key, or a model on your
   file.
 - **The day's road in the status bar**: what is due, ready and to read, the verdicts recorded today, the streak.
 - **Commands on the open note**: check this concept, teach it, explore it, place yourself toward it, mark it as read.
+- **A progress block** (` ```knowledge-os `): a note's concepts, what it assumes and what it teaches, each with where
+  you stand on the road and a button to check it, be taught it or place yourself toward it. paper2chapter writes one
+  into each chapter.
+- **An API for other plugins**: the standing of concepts by name, and the site's page for one, so a plugin like
+  paper2chapter can tell which prerequisites you know.
 
 Desktop only (it starts a Python process). It needs Obsidian 1.13.2 or later, Python 3.11 or later with Markdown and
 PyYAML, and a vault with the learning road's scripts.

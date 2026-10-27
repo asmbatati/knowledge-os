@@ -22,7 +22,7 @@ import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-KINDS = ("attempts", "sessions", "banks", "lab", "tutor", "teach", "coach", "usage")
+KINDS = ("attempts", "sessions", "banks", "lab", "tutor", "teach", "coach", "usage", "words")
 
 
 class Ledger:

@@ -77,6 +77,56 @@ and the status bar open Today.
 The tab frames the site's pages with their header hidden. A note's **Open in Obsidian** opens the note in a new tab. The
 tab's buttons reload it or open the same page in the browser. The tab remembers its page across restarts.
 
+## The progress block
+
+A note can show where you stand on the concepts it names, live (plugin 1.1, site 0.9):
+
+````markdown
+```knowledge-os
+progress
+teaches: teaches
+assumes: prerequisites
+```
+````
+
+The two lines name the frontmatter properties that list the note's concepts as links; without them the block reads
+`teaches` and `prerequisites`. [paper2chapter](https://github.com/serrysibaee/paper2chapter) writes this block into
+each chapter when its Knowledge OS integration is on.
+
+- **What it assumes** and **what it teaches**, each with how many stand. Each concept is a link to its note, with its
+  status on the road: granted, provisional, passed, mastered, ready to check, to read again, locked, or not on the
+  road. A concept it teaches that does not stand yet says how many of the concepts it rests on, itself included, still
+  have to stand.
+- **Buttons by status**: *Check* and *Teach me* when it is ready or to be read again, *Teach me* and *Place me* when it
+  is locked, *Explore* when the road does not hold it.
+- It is drawn again when the road's files change, when the note's properties change, and every five minutes.
+- It **writes nothing** and **never starts the site by itself**. When the site is not running it says so, with a
+  *Start the site* button; a site older than 0.9 has no standing to give, and the block says to update it.
+
+## For other plugins
+
+Another plugin can ask where its reader stands, through `app.plugins.plugins['knowledge-os'].api` (version 1):
+
+```ts
+api = {
+	version: 1,
+	// the standing of concepts by note name; a name the road does not hold is left out, so your own rules decide it
+	status(names: string[]): Promise<Record<string, {
+		note: string; state: string; stands: boolean; layer: number; to_stand: number; of: number;
+	}>>,
+	// the site's page for a concept: 'check' | 'teach' | 'place' | 'explore'
+	open(action: string, concept: string): void,
+};
+```
+
+- `state` is the road's: `granted`, `provisional`, `passed`, `mastered` (these stand), `ready`, `to-read`, `locked`.
+  `stands` also checks that everything the concept rests on stands. `to_stand` of `of` counts the concepts of its
+  closure, itself included, that do not stand yet.
+- `status` asks the site and **never starts it**: when the site is not running the promise rejects, and you fall back
+  on what you know. At most 200 names a call.
+- `open` shows the page in the plugin's tab or the browser, starting the site as the commands do.
+- Check `api.version >= 1` and that `status` is a function before using it: an older Knowledge OS has no `api`.
+
 ## Troubleshooting
 
 | What you see | Why, and what to do |
@@ -88,5 +138,7 @@ tab's buttons reload it or open the same page in the browser. The tab remembers 
 | "no model grades your answers" | no model chosen, not trusted yet, or out of reach (no CLI, no key, today's budget spent, the Claude plan's quiet hours) |
 | The tab is blank | the site must allow Obsidian to frame it: update the site to 0.8.0 or later |
 | Obsidian's hotkeys do nothing in the tab | the keys go to the framed page while it has the focus: click the tab's title or the sidebar first |
+| A progress block says the site is older than the plugin | the site has no standing to give: update it to 0.9.0 or later |
+| A progress block's concept says "not on the road" | the road's graph does not hold that note (no `requires:` or `axiom:`), or the property links a note of another name |
 
 The site exits by itself when Obsidian goes away, so a crash leaves no process behind.

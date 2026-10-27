@@ -1,4 +1,5 @@
 /* A client for the Knowledge OS server. The transport is injected, so it runs in Node tests too. */
+import type { Standing } from './block.ts';
 
 export interface HttpRequest {
 	url: string;
@@ -127,6 +128,14 @@ export class KnowledgeClient {
 	}
 
 	today = () => this.call<Record<string, unknown>>('/api/today');
+
+	/** Each name's standing on the road (a read; names the road does not hold are left out). No names, no request. */
+	async standing(names: string[]): Promise<Record<string, Standing>> {
+		const unique = [...new Set(names)];
+		if (!unique.length) return {};
+		const query = unique.map((n) => 'name=' + encodeURIComponent(n)).join('&');
+		return (await this.call<{ standing?: Record<string, Standing> }>(`/api/standing?${query}`)).standing ?? {};
+	}
 	models = () => this.call<Models>('/api/models');
 	check = (provider: string) => this.call<{ ready: boolean; version: string | null; message: string }>(
 		`/api/models/check?provider=${encodeURIComponent(provider)}`);

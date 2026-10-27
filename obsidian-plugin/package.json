@@ -1,6 +1,6 @@
 {
 	"name": "knowledge-os-obsidian",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "The Knowledge OS in Obsidian: the site in a tab, the road in the status bar, any model by subscription or API key.",
 	"main": "main.js",
 	"type": "module",

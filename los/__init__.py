@@ -4,4 +4,4 @@ The road's code stays in the vault (x/scripts/_road*.py); this package imports i
 pages. It writes verdicts only through the road's own writer, and its own ledgers under x/reports/learning/los/.
 """
 
-VERSION = "0.8.1"
+VERSION = "0.9.0"

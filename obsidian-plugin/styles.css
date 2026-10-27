@@ -46,3 +46,84 @@
 	font-size: var(--font-ui-smaller);
 	white-space: pre-wrap;
 }
+
+/* The progress block: a note's concepts with their standing on the road */
+.kos-progress {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-2) var(--size-4-3);
+	margin: var(--size-4-2) 0;
+}
+
+.kos-progress-head {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.kos-progress-title {
+	display: flex;
+	gap: var(--size-4-2);
+	align-items: baseline;
+	font-weight: var(--font-semibold);
+	margin-top: var(--size-4-2);
+}
+
+.kos-progress-count,
+.kos-detail {
+	font-weight: normal;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.kos-progress-empty {
+	color: var(--text-muted);
+	margin: var(--size-4-1) 0;
+}
+
+.kos-progress-rows {
+	list-style: none;
+	padding-left: 0;
+	margin: var(--size-4-1) 0;
+}
+
+.kos-progress-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	align-items: center;
+	padding: 2px 0;
+}
+
+.kos-state {
+	font-size: var(--font-ui-smaller);
+	padding: 0 var(--size-4-2);
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+}
+
+.kos-state-granted,
+.kos-state-provisional,
+.kos-state-passed,
+.kos-state-mastered {
+	color: var(--text-success);
+}
+
+.kos-state-ready,
+.kos-state-to-read {
+	color: var(--text-accent);
+}
+
+.kos-progress-actions {
+	display: inline-flex;
+	gap: var(--size-4-1);
+	margin-left: auto;
+}
+
+.kos-progress-actions button {
+	font-size: var(--font-ui-smaller);
+	padding: 0 var(--size-4-2);
+	height: auto;
+}

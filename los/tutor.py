@@ -1,7 +1,8 @@
 """The course tutor (the vault's x/SYSTEM/Course Tutor and 3D Viewer Plan 2026-10.md, §3).
 
 A course is read from the vault (a card in Library/Courses or Library/Books, and the lecture or chapter notes that name
-it in `course:` or `book:`, in the order of `number:`), or typed as a syllabus whose sessions the learner ties to
+it in `course:` or `book:`, in the order of `number:`; or a paper card in Library/Papers and the chapter that names it in
+`paper:`, paper chapters K6), or typed as a syllabus whose sessions the learner ties to
 concept notes. The learner's dates are the site's own state, x/reports/learning/los/courses/<id>.json; what the tutor
 did is the `tutor` ledger. Before a lecture, after it and before an exam the tutor reads the road (statuses, layers,
 the #stuck flags) and the notes, and invents nothing. Claude compares a free recall with the lecture and answers
@@ -131,9 +132,12 @@ class Tutor:
         notes = self.vault.library_notes()
         cards = {n["name"].lower(): n for n in notes
                  if n["rel"].startswith(("Library/Courses/", "Library/Books/"))}
+        # a paper's chapter names its card in `paper:` (paper2chapter); the card is found by its name
+        for k, v in self.vault.paper_cards(n.get("paper") for n in notes if n.get("paper")).items():
+            cards.setdefault(k, v)
         groups: dict[str, list[dict]] = {}
         for n in notes:
-            card = n["course"] or n["book"]
+            card = n["course"] or n["book"] or n.get("paper") or ""
             if card and n["number"] is not None and card.lower() in cards:
                 groups.setdefault(cards[card.lower()]["name"], []).append(n)
         return groups, cards
@@ -143,7 +147,8 @@ class Tutor:
         out = []
         for card, ns in groups.items():
             numbers = {n["number"] for n in ns}
-            out.append({"card": card, "kind": "book" if any(n["book"] for n in ns) else "course",
+            kind = "book" if any(n["book"] for n in ns) else "paper" if any(n.get("paper") for n in ns) else "course"
+            out.append({"card": card, "kind": kind,
                         "rel": cards[card.lower()]["rel"], "sessions": len(numbers)})
         return sorted(out, key=lambda c: c["card"].lower())
 

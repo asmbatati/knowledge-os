@@ -281,6 +281,32 @@ def group_api(ctx) -> None:
             st, *_ = cl.req("GET", "/api/today", headers={"Host": f"localhost:{port}"})
             check("localhost is accepted", st == 200)
 
+            # The standing of concepts, for another plugin through the Obsidian plugin's API (paper chapters, K2)
+            files_before = {str(p): (p.stat().st_mtime_ns, p.stat().st_size) for p in root.rglob("*") if p.is_file()}
+            st, _, _, sd = cl.req("GET", "/api/standing?name=Collection&name=counting&name=Natural%20number"
+                                         "&name=Stray%20idea&name=Nope")
+            got = (sd or {}).get("standing") or {}
+            check("standing answers each name on the road, under the name asked",
+                  st == 200 and sorted(got) == ["Collection", "Natural number", "counting"])
+            check("an axiom is granted and stands, nothing left beneath it",
+                  got.get("Collection") == {"note": "Collection", "state": "granted", "stands": True, "layer": 0,
+                                            "to_stand": 0, "of": 1})
+            check("a concept whose prerequisites stand is ready, its own check still to pass",
+                  got.get("counting") == {"note": "Counting", "state": "ready", "stands": False, "layer": 1,
+                                          "to_stand": 1, "of": 2})
+            check("a concept above it is locked, with how many of its closure still do not stand",
+                  got.get("Natural number", {}).get("state") == "locked"
+                  and got["Natural number"]["stands"] is False and got["Natural number"]["to_stand"] == 2
+                  and got["Natural number"]["of"] == 3)
+            check("a concept note off the graph and an unknown name are left out",
+                  "Stray idea" not in got and "Nope" not in got)
+            st, _, _, sd = cl.req("GET", "/api/standing")
+            check("no names, an empty answer", st == 200 and sd == {"standing": {}})
+            st, *_ = cl.req("GET", "/api/standing?" + "&".join(f"name=c{i}" for i in range(201)))
+            check("more than 200 names at once is refused", st == 400)
+            files_after = {str(p): (p.stat().st_mtime_ns, p.stat().st_size) for p in root.rglob("*") if p.is_file()}
+            check("standing writes nothing", files_after == files_before)
+
             st, _, raw, nx = cl.req("GET", "/api/next")
             check("the axiom is granted: the first item is a check of the concept above it",
                   st == 200 and nx["kind"] == "check" and nx["concept"] == "Counting" and len(nx["questions"]) == 3)

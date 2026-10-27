@@ -81,14 +81,39 @@ function lookFirst(main, nx, ctx, head) {
 }
 
 // In my words (decision 6): after a passed check, one sentence of the learner's own, kept as written. The road keeps it
-// in its ledger and writes it into the note's In my words section; nothing else writes there.
+// in its ledger and writes it into the note's In my words section; nothing else writes there. Since 26 Oct 2026 the
+// sentence can be checked first: the model says right, partly or not quite, and what to fix, and the learner rewrites
+// it or keeps it. The check is an opinion, never a verdict, and never writes the sentence for them.
 function wordsBox(concept, t) {
   const input = h("textarea", { class: "answer", rows: 2, dir: "auto", maxlength: 400, placeholder: t("words.ph"),
     "aria-label": t("words.ask") });
-  const save = h("button", { class: "primary", disabled: true }, t("words.save"));
-  const box = h("div", { class: "words-box" }, h("p", { class: "label" }, t("words.ask")), input,
-    h("div", { class: "row" }, save, h("span", { class: "hint" }, t("words.hint"))));
-  input.addEventListener("input", () => { save.disabled = !input.value.trim(); });
+  const save = h("button", { class: "ghost", disabled: true }, t("words.save"));
+  const check = h("button", { class: "primary", disabled: true }, t("words.check"));
+  const verdict = h("div", { class: "words-verdict" });
+  const box = h("div", { class: "words-box" }, h("p", { class: "label" }, t("words.ask")), input, verdict,
+    h("div", { class: "row wrap" }, check, save, h("span", { class: "hint" }, t("words.hint"))));
+  input.addEventListener("input", () => {
+    save.disabled = check.disabled = !input.value.trim();
+    fill(verdict);                                   // a rewritten sentence has not been checked
+  });
+  check.onclick = async () => {
+    check.disabled = true;
+    fill(verdict, h("p", { class: "muted pulse" }, t("words.checking")));
+    let r;
+    try {
+      r = await api.post("/api/words/check", { concept, text: input.value, lang: document.documentElement.lang || "en" });
+    } catch (e) { fill(verdict); toast(e.message); check.disabled = false; return; }
+    if (!r.verdict) {
+      fill(verdict, h("p", { class: "lang-bar" }, t("words.nocheck")));
+    } else {
+      fill(verdict, h("div", { class: `grade ${r.verdict === "right" ? "right" : r.verdict === "partly" ? "neutral" : "wrong"}` },
+        h("strong", {}, t("words.v." + r.verdict))),
+        r.fix ? h("p", { dir: "auto" }, mathText(r.fix)) : null,
+        h("p", { class: "meta" }, r.verdict === "right" ? t("words.keep") : t("words.rewrite")));
+      typeset(verdict);
+    }
+    check.disabled = false;
+  };
   save.onclick = async () => {
     save.disabled = true;
     try {

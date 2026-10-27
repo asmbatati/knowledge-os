@@ -19,6 +19,21 @@ export const current = () => store(SKEY);
 export const remember = (s) => store(SKEY, s);
 export function forget() { try { localStorage.removeItem(SKEY); } catch (e) { /* storage may be blocked */ } }
 
+/** Start a coached session and open it: from Today, or from a concept's page on that concept (26 Oct 2026). A session
+ *  still open on this page is ended first, so it keeps its end row and its lecture note. */
+export async function startSession(ctx, mode, topic = "", item = "") {
+  const open = current();
+  if (open && open.id) {
+    try { await api.post("/api/coach/end", { session: open.id }); } catch (e) { /* gone already: nothing to end */ }
+    forget();
+  }
+  const s = await api.post("/api/coach/start", { mode, topic, lang: ctx.lang() });
+  remember({ id: s.session, started: Date.now(), agenda: s.agenda });
+  if (ctx.timer.state().phase === "idle") ctx.timer.startFocus("", item || topic || (mode === "road" ? ctx.t("coach.road") : ""));
+  go("#/study");
+  return s;
+}
+
 export function agendaLine(ag, t) {
   return ag.warmup ? t("study.agenda", { w: ag.warmup, n: ag.new, r: ag.reflect })
     : t("study.agenda.nowarm", { n: ag.new, r: ag.reflect });
@@ -291,10 +306,20 @@ export async function render(main, params, ctx) {
         h("div", { class: "row" }, btn, h("span", { class: "hint" }, t(el.tagName === "INPUT" ? "study.enter" : "check.submit.hint")))));
       el.focus();
     };
-    const send = async () => {
+    const send = async (sure = false) => {
+      const v = Object.fromEntries(fields.map(([name, , el]) => [name, el.value]));
+      // an empty teach-back is allowed, but said so first: nothing then goes into the session's note or the concept's
+      // My lecture notes (26 Oct 2026)
+      if (!sure && !v.teachback.trim()) {
+        fill(body, h("section", { class: "card" }, h("h2", {}, t("study.reflect")),
+          h("p", {}, t(v.sentence.trim() || v.fuzzy.trim() ? "study.empty.tb" : "study.empty.all")),
+          h("div", { class: "row wrap" },
+            h("button", { class: "primary", onclick: () => { k = 1; ask(); } }, t("study.empty.write")),
+            h("button", { class: "ghost", onclick: () => send(true) }, t("study.empty.skip")))));
+        return;
+      }
       fill(body, h("p", { class: "muted pulse" }, t("study.reading")));
       let r;
-      const v = Object.fromEntries(fields.map(([name, , el]) => [name, el.value]));
       try { r = await api.post("/api/coach/reflect", { session: cur.id, ...v, concept: target }); }
       catch (e) { toast(e.message); ask(); return; }
       const propose = r.propose ? h("p", { class: "lang-bar" }, t("study.propose", { line: r.propose }), " ",

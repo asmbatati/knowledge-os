@@ -4,7 +4,7 @@
 
 import { api, h, conceptHref, fmtDate, fill, toast, go } from "../ui.js";
 import { nextText, nextHref } from "../tutor/words.js";
-import { remember, current } from "./study.js";
+import { current, startSession } from "./study.js";
 
 export async function render(main, params, ctx) {
   const { t } = ctx;
@@ -65,17 +65,14 @@ export async function render(main, params, ctx) {
 }
 
 function frontDoor(coach, ctx, hasRoad) {
-  const { t, timer } = ctx;
+  const { t } = ctx;
   const p = coach.profile;
   const label = (n) => ctx.label(n);
   const buttons = [];
   const start = async (mode, topic) => {
     buttons.forEach((b) => { b.disabled = true; });
     try {
-      const s = await api.post("/api/coach/start", { mode, topic, lang: ctx.lang() });
-      remember({ id: s.session, started: Date.now(), agenda: s.agenda });
-      if (timer.state().phase === "idle") timer.startFocus("", topic || (mode === "road" ? t("coach.road") : p.goal));
-      go("#/study");
+      await startSession(ctx, mode, topic, topic || (mode === "road" ? t("coach.road") : p.goal));
     } catch (e) {
       toast(e.message);
       buttons.forEach((b) => { b.disabled = false; });

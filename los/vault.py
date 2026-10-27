@@ -27,6 +27,7 @@ _META_CACHE: dict[str, tuple] = {}
 _CACHE_LOCK = threading.RLock()
 
 LIB_DIRS = ("Library/Sources", "Library/Courses", "Library/Books")
+PAPERS_DIR = "Library/Papers"       # the paper cards: found by name for the chapters that name them, never parsed
 IMAGE_EXTS = (".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp")
 _ABSTRACT = re.compile(r"^>\s*\[!abstract\][^\n]*\n((?:>[^\n]*(?:\n|$))+)", re.M)
 _PART = re.compile(r"^###\s+(.+?)\s*$")
@@ -220,8 +221,8 @@ class Vault:
 
     def library_notes(self) -> list[dict]:
         """The course tutor's reading of Library (sources, courses, books): each note's name, path, type, the card it
-        belongs to (`course:` or `book:`), its `number:`, what it `teaches:`, its one line and its parts. Each note is
-        parsed again only when it changes, as the graph is."""
+        belongs to (`course:`, `book:` or `paper:`), its `number:`, what it `teaches:`, its one line and its parts.
+        Each note is parsed again only when it changes, as the graph is."""
         out = []
         for base in LIB_DIRS:
             d = self.root / base
@@ -252,8 +253,20 @@ class Vault:
         return {"name": p.stem, "rel": p.relative_to(self.root).as_posix(), "type": s.get("type") or "",
                 "source_type": s.get("source_type") or "", "title": (s.get("title") or p.stem).strip('"'),
                 "course": self.RG.link_name(s.get("course")) or "", "book": self.RG.link_name(s.get("book")) or "",
+                "paper": self.RG.link_name(s.get("paper")) or "",
                 "number": number, "teaches": list(self.RG.fm_list(lines, "teaches") or []),
                 "one_line": _abstract(body), "parts": _parts(body)}
+
+    def paper_cards(self, names) -> dict[str, dict]:
+        """The paper cards that chapter notes name (`paper:`), by lower-case name: each one's name and path, found by
+        its file name under Library/Papers and never parsed. The shelf is listed only when a note names a paper: the
+        vault holds hundreds of cards, and the tutor needs only those a chapter names."""
+        want = {str(n).lower() for n in names if n}
+        d = self.root / PAPERS_DIR
+        if not want or not d.exists():
+            return {}
+        return {p.stem.lower(): {"name": p.stem, "rel": p.relative_to(self.root).as_posix()}
+                for p, _ in _scan(d, recursive=True) if p.stem.lower() in want}
 
     def concept_meta(self, name: str) -> dict:
         """A concept note's preview (its abstract, else the first sentence of its Definition) and its aliases, cached

@@ -60,6 +60,14 @@ test('the plugin starts the site, reads it, and saves a model only with its secr
 		const today = await client.today();
 		assert.equal(typeof today, 'object');
 
+		// the standing the plugin's API gives other plugins, read from the road
+		const standing = await client.standing(['Collection', 'counting', 'Stray idea', 'No such concept']);
+		assert.deepEqual(Object.keys(standing).sort(), ['Collection', 'counting']);
+		assert.equal(standing.Collection?.state, 'granted');
+		assert.equal(standing.Collection?.stands, true);
+		assert.equal(standing.counting?.note, 'Counting');
+		assert.equal(standing.counting?.state, 'ready');
+
 		const before = await client.models();
 		assert.ok(before.providers.some((p) => p.id === 'claude-cli'));
 		assert.ok(before.providers.some((p) => p.id === 'ollama'));

@@ -17,6 +17,7 @@ from pathlib import Path
 from .selftest import Client, check
 
 CARD = "Numbers - A Demo Course"
+PAPER = "Counting in Practice"
 
 
 class FakeLLM:
@@ -60,6 +61,17 @@ def group_tutor(ctx) -> None:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         demo.make_demo(root)
+        # A paper card and the chapter paper2chapter wrote for it (paper chapters, K6), and a chapter whose card the
+        # vault does not hold
+        demo._write(root, f"Library/Papers/Demo papers/{PAPER}.md",
+                    ["---", f'title: "{PAPER}"', "type: source-summary", "tags:", "  - paper", "---", "", f"# {PAPER}"])
+        demo._write(root, f"Library/Sources/paper-chapters/{PAPER} - Chapter.md",
+                    ["---", f'title: "{PAPER} - Chapter"', "type: source-summary", "source_type: chapter",
+                     f'paper: "[[{PAPER}]]"', "number: 1", f'up: "[[{PAPER}]]"', "teaches:", '  - "[[Counting]]"',
+                     '  - "[[Natural number]]"', "---", "", f"# {PAPER} - Chapter"])
+        demo._write(root, "Library/Sources/paper-chapters/Lost - Chapter.md",
+                    ["---", 'title: "Lost - Chapter"', "type: source-summary", "source_type: chapter",
+                     'paper: "[[No Such Paper]]"', "number: 1", "teaches:", '  - "[[Counting]]"', "---"])
         learn = root / "x" / "reports" / "learning"
         clock = {"now": datetime(2027, 1, 9, 10, 0)}
         llm = FakeLLM()
@@ -83,6 +95,16 @@ def group_tutor(ctx) -> None:
             check("a card the vault does not hold is refused", False)
         except TutorError as e:
             check("a card the vault does not hold is refused", e.status == 404)
+        paper = next((c for c in cat if c["card"] == PAPER), None)
+        check("a paper card and its chapter are a course of kind paper, of one session",
+              paper is not None and paper["kind"] == "paper" and paper["sessions"] == 1
+              and paper["rel"] == f"Library/Papers/Demo papers/{PAPER}.md")
+        pdraft = tutor.draft(PAPER)
+        check("its draft reads what the chapter teaches",
+              [s["concepts"] for s in pdraft["sessions"]] == [["Counting", "Natural number"]]
+              and pdraft["source"] == {"kind": "card", "card": PAPER})
+        check("a chapter naming a paper the vault does not hold is no course",
+              not any(c["card"] == "No Such Paper" for c in cat))
 
         # ---------------------------------------------------------------- saving the learner's dates
         dates = ["2027-01-10", "2027-01-17", "2027-01-24"]

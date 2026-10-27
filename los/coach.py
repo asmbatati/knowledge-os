@@ -439,9 +439,11 @@ class Coach:
         ok, code = self.llm.available() if self.llm else (False, "no_cli")
         if ok:
             ask = focus if focus and focus.lower() != str(concept or "").lower() else ""
+            before = self.before_lines(self.history(concept, exclude=s["id"])) if concept and not stuck_on else []
             try:
                 v = self.llm.call(LESSON_SYSTEM, lesson_prompt(concept or focus, note or "", self.profile()["lines"],
-                                                               self._requires(concept), ask, s["lang"], stuck_on))
+                                                               self._requires(concept), ask, s["lang"], stuck_on,
+                                                               before))
                 cost = float(v.get("_cost_usd") or 0)
                 built, claude, code = lesson_of(v, note or ""), True, ""
             except Exception:
@@ -897,6 +899,57 @@ class Coach:
                "gap": " ".join(str(text).split())[:300], "source": source, "session": sid}
         with open(path, "a", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    # ------------------------------------------------------------------ what the coach has done on a concept
+    def history(self, concept: str, exclude: str = "") -> dict | None:
+        """The coached sessions on a concept, from the coach's ledger (26 Oct 2026): how many, the last day, the
+        questions answered and right, and the last teach-back's grade, refinement and missing points; with the
+        questions missed and what was left fuzzy, for the next lesson to build on. None when never coached."""
+        k = str(concept or "").strip().lower()
+        if not k or not self.ledger:
+            return None
+        sessions, asked, right, missed, last = {}, 0, 0, [], None
+        for r in self.ledger.rows("coach"):
+            sid = str(r.get("session") or "")
+            if not sid or sid == exclude or str(r.get("concept") or "").lower() != k:
+                continue
+            kind = r.get("type")
+            if kind not in ("practice", "reflect", "read"):     # a step taken; a lesson written ahead is not
+                continue
+            sessions[sid] = r.get("date") or sessions.get(sid)
+            if kind == "practice":
+                asked += 1
+                if r.get("correct"):
+                    right += 1
+                elif r.get("stem"):
+                    missed.append(" ".join(str(r["stem"]).split())[:200])
+            elif kind == "reflect" and (r.get("teachback") or r.get("sentence") or r.get("fuzzy")):
+                last = r
+        if not sessions:
+            return None
+        out = {"sessions": len(sessions), "last": max(d for d in sessions.values() if d) if any(sessions.values())
+               else None, "asked": asked, "right": right, "missed": missed[-3:], "grade": "", "refinement": "",
+               "missing": [], "fuzzy": ""}
+        if last:
+            out.update({"grade": last.get("grade") or "", "refinement": last.get("refinement") or "",
+                        "missing": list(last.get("missing") or [])[:3], "fuzzy": last.get("fuzzy") or ""})
+        return out
+
+    @staticmethod
+    def before_lines(h: dict | None) -> list[str]:
+        """A concept's coaching history as the lines the next lesson builds on."""
+        if not h:
+            return []
+        out = [f"coached {h['sessions']} time(s) before; {h['right']} of {h['asked']} questions right"]
+        out += [f"missed the question: {m}" for m in h["missed"]]
+        if h["grade"]:
+            out.append(f"their teach-back was {h['grade']}")
+        if h["refinement"]:
+            out.append(f"the refinement they were given: {h['refinement']}")
+        out += [f"their teach-back missed: {m}" for m in h["missing"]]
+        if h["fuzzy"]:
+            out.append(f"they said this stayed fuzzy: {h['fuzzy']}")
+        return out
 
     # ------------------------------------------------------------------ open loops
     def open_loops(self) -> list[dict]:

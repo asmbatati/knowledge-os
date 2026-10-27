@@ -38,6 +38,7 @@ from .teach import HABITS, LEVELS, Teach, TeachError
 
 MAX_BODY = 64 * 1024
 MAX_ANSWER = 4000
+MAX_STANDING = 200          # names in one /api/standing request
 ITEM_HOURS = 12
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
        "font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; "
@@ -180,6 +181,7 @@ class App:
             return 204, self._headers("image/x-icon"), b""
         api = {"/api/health": self.api_health, "/api/today": self.api_today, "/api/next": self.api_next,
                "/api/concept": self.api_concept, "/api/graph": self.api_graph, "/api/progress": self.api_progress,
+               "/api/standing": self.api_standing,
                "/api/lab": self.api_lab, "/api/courses": self.api_courses, "/api/course": self.api_course,
                "/api/course/draft": self.api_course_draft, "/api/tutor/session": self.api_tutor_session,
                "/api/tutor/exam": self.api_tutor_exam, "/api/place": self.api_place,
@@ -232,7 +234,8 @@ class App:
                "/api/tutor/practice/self": self.api_tutor_practice_self,
                "/api/place/answer": self.api_place_answer, "/api/place/self": self.api_place_self,
                "/api/place/skip": self.api_place_skip,
-               "/api/words": self.api_words, "/api/teach/start": self.api_teach_start,
+               "/api/words": self.api_words, "/api/words/check": self.api_words_check,
+               "/api/teach/start": self.api_teach_start,
                "/api/teach/say": self.api_teach_say, "/api/teach/end": self.api_teach_end,
                "/api/coach/profile": self.api_coach_profile, "/api/coach/start": self.api_coach_start,
                "/api/coach/step": self.api_coach_step, "/api/coach/answer": self.api_coach_answer,
@@ -632,12 +635,36 @@ class App:
         reads = [r["date"] for r in self.ledger.rows("sessions")
                  if r.get("type") == "read" and str(r.get("concept", "")).lower() == k]
         out["read_on_site"] = reads[-1] if reads else None
+        out["coached"] = self.coach.history(canon)          # practice, never a verdict: shown beside the road's own
         shown = text if view["name"].lower() == canon.lower() else self.vault.note_text(view["name"])
         if shown is None:                       # a counterpart outside Atlas/Concepts: the English note, said so
             shown, view = text, dict(view, name=canon, title=out["title"], lang="en", other=None, missing="none")
         out["html"] = render_note(shown, self.vault.known(), self.vault.assets())
         out["view"] = self._view(view)
         return out
+
+    def api_standing(self, q):
+        """The standing of concepts by name, for another Obsidian plugin through this one's API (the vault's Paper
+        Chapters Plan 2026-10, wave 3b; docs/plans/2026-10-27-paper-chapters.md, K2): each name the road holds, under
+        the name asked, with its status, whether it stands, its layer, and how many concepts of its closure still do
+        not stand. A name the road does not hold, a concept note off the graph included, is left out, so the caller's
+        own rules decide it. Reads only."""
+        names = [str(x).strip() for x in q.get("name") or [] if str(x).strip()]
+        if len(names) > MAX_STANDING:
+            raise HttpError(400, f"at most {MAX_STANDING} names at a time")
+        g, _roads = self.vault.graph()
+        RG = self.vault.RG
+        st, stat, lay = RG.standing(g), RG.statuses(g), RG.layers(g)
+        out = {}
+        for asked in names:
+            k = asked.lower()
+            n = g.nodes.get(k)
+            if n is None or len(asked) > 300:
+                continue
+            cl = RG.closure(g, [k])
+            out[asked] = {"note": n.name, "state": stat.get(k), "stands": bool(st.get(k)), "layer": lay.get(k),
+                          "to_stand": sum(1 for x in cl if not st.get(x)), "of": len(cl)}
+        return {"standing": out}
 
     def api_graph(self, q):
         g, roads = self.vault.graph()
@@ -1099,6 +1126,28 @@ class App:
         except SystemExit as e:
             raise HttpError(409, str(e))
         return {"ok": True, "concept": canon, "id": w["id"]}
+
+    def api_words_check(self, d):
+        """In my words, checked before it is kept (26 Oct 2026: a sentence was kept whatever it said). The coach's
+        model compares it with the note: right, partly or wrong, and what to fix, so the learner rewrites it themselves.
+        A model's opinion, never a verdict; the sentence is kept only when the learner keeps it, as they wrote it."""
+        from .coachllm import REFLECT_SYSTEM, words_of, words_prompt
+        canon = self._canon(d.get("concept"))
+        text = " ".join(str(d.get("text") or "").split())
+        if not text or len(text) > 400:
+            raise HttpError(400, "In my words is one sentence, 1 to 400 characters")
+        llm = self.coach.llm
+        ok, code = llm.available() if llm else (False, "no_cli")
+        if not ok:
+            return {"verdict": "", "fix": "", "why_code": code}
+        try:
+            v = llm.call(REFLECT_SYSTEM, words_prompt(canon, self.vault.note_text(canon) or "", text,
+                                                      page_lang({"lang": [d.get("lang") or "en"]})))
+        except Exception:
+            return {"verdict": "", "fix": "", "why_code": "unreachable"}
+        out = words_of(v)
+        self.ledger.append("words", {"concept": canon, "text": text, **out})
+        return {**out, "why_code": "" if out["verdict"] else "unreachable"}
 
     def api_focus(self, d):
         event = d.get("event")

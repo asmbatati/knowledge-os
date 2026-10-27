@@ -1,5 +1,7 @@
 import { FileSystemAdapter, normalizePath, Notice, Platform, Plugin, requestUrl, TFile } from 'obsidian';
 import { KnowledgeClient, pageUrl, routes, type Http } from './api.ts';
+import type { Action, Standing } from './block.ts';
+import { ProgressBlock, type BlockHost } from './progress.ts';
 import { countLines, localDay, parsePlan, readable, ROAD_FILE, statusText, type SiteToday } from './road.ts';
 import { ServerManager, type RunFn, type SpawnFn } from './server.ts';
 import { DEFAULT_SETTINGS, KEY_SETTINGS, KosSettingTab, type KosSettings } from './settings.ts';
@@ -19,9 +21,30 @@ const DEBOUNCE_MS = 2000;
 /* Learning Road kept read_on to these folders (vault CLAUDE.md §8.3); this vault keeps them when the zones are unset. */
 const LEARNING_ROAD_ZONES = 'Atlas/, Library/, Areas/Portfolio/My Research/';
 
-export default class KnowledgeOsPlugin extends Plugin {
+/** The routes another plugin may open through the API, by action. */
+const OPEN: Record<Action, (name: string) => string> = { check: routes.check, teach: routes.teach, place: routes.place, explore: routes.explore };
+const MAX_NAMES = 200;
+
+/**
+ * What this plugin publishes for other plugins (docs/OBSIDIAN.md, *For other plugins*; paper2chapter uses it):
+ * `app.plugins.plugins['knowledge-os'].api`. Version 1: status() reads each concept's standing from the site and never
+ * starts it; open() shows the site's page for a concept, starting the site as every command does.
+ */
+export interface KnowledgeOsApi {
+	version: 1;
+	status(names: string[]): Promise<Record<string, Standing>>;
+	open(action: Action, concept: string): void;
+}
+
+export default class KnowledgeOsPlugin extends Plugin implements BlockHost {
 	settings: KosSettings = { ...DEFAULT_SETTINGS };
 	server!: ServerManager;
+	readonly blocks = new Set<ProgressBlock>();
+	readonly api: KnowledgeOsApi = {
+		version: 1,
+		status: (names) => this.standing(names),
+		open: (action, concept) => this.openFor(action, concept),
+	};
 	private apiClient: KnowledgeClient | null = null;
 	private bar: HTMLElement | null = null;
 	private pending: number | null = null;
@@ -90,8 +113,13 @@ export default class KnowledgeOsPlugin extends Plugin {
 		this.registerDomEvent(this.bar, 'click', () => this.openRoute('today'));
 		// A window reload never runs a plugin's unload: stop the site this plugin started before the window goes.
 		this.registerDomEvent(window, 'beforeunload', () => this.server.stop());
+		this.registerMarkdownCodeBlockProcessor('knowledge-os', (source, el, ctx) => {
+			ctx.addChild(new ProgressBlock(el, this, source, ctx.sourcePath));
+		});
 		this.registerEvent(this.app.vault.on('modify', (f) => this.onFile(f.path)));
 		this.registerEvent(this.app.vault.on('create', (f) => this.onFile(f.path)));
+		// a block reads its note's frontmatter: when that changes, the block is drawn again
+		this.registerEvent(this.app.metadataCache.on('changed', (f) => this.redrawBlocks(f.path)));
 		this.registerInterval(window.setInterval(() => void this.refresh(), EVERY_MS));
 		this.app.workspace.onLayoutReady(() => {
 			void this.refresh();
@@ -230,6 +258,44 @@ export default class KnowledgeOsPlugin extends Plugin {
 		});
 	}
 
+	// ------------------------------------------------------------------ for other plugins, and the progress block
+
+	/** Each concept's standing on the road, from the site; a list of names only, at most 200, and never a start. */
+	async standing(names: unknown): Promise<Record<string, Standing>> {
+		if (!Array.isArray(names)) return {};
+		const list = names.filter((n): n is string => typeof n === 'string').map((n) => n.trim())
+			.filter((n) => n && n.length <= 300).slice(0, MAX_NAMES);
+		return this.client().standing(list);
+	}
+
+	/** The site's page for a concept, by action: check, teach, place or explore. Anything else is ignored. */
+	openFor(action: string, concept: string): void {
+		const name = typeof concept === 'string' ? concept.trim() : '';
+		const route = Object.prototype.hasOwnProperty.call(OPEN, action) && name ? OPEN[action as Action](name) : '';
+		if (route) this.openRoute(route);
+	}
+
+	frontmatter(path: string): Record<string, unknown> | undefined {
+		return this.app.metadataCache.getCache(path)?.frontmatter;
+	}
+
+	resolve(link: string, from: string): string | null {
+		return this.app.metadataCache.getFirstLinkpathDest(link, from)?.basename ?? null;
+	}
+
+	openLink(name: string, from: string): void {
+		void this.app.workspace.openLinkText(name, from, false);
+	}
+
+	start(): Promise<unknown> {
+		return this.ensureServer();
+	}
+
+	/** Draw the progress blocks again: all of them, or those of one note. */
+	private redrawBlocks(path?: string): void {
+		for (const b of this.blocks) if (!path || b.path === path) void b.draw();
+	}
+
 	// ------------------------------------------------------------------ notes
 
 	/** A note the framed site names: opened in a new tab beside it. */
@@ -298,6 +364,7 @@ export default class KnowledgeOsPlugin extends Plugin {
 			this.client().today().then((t) => t as SiteToday, () => null),
 		]);
 		this.siteUp = site !== null;
+		this.redrawBlocks(); // the road moved, or the site came or went
 		this.bar.setText(statusText(parsePlan(plan), countLines(verdicts), site));
 		this.bar.setAttr('aria-label', this.siteUp
 			? 'The Knowledge OS is running: click to open it'

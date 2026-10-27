@@ -6,6 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
 import * as stub from './obsidian-stub.ts';
+import { FakeEl } from './helpers.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 mkdirSync(here + '.build', { recursive: true });
@@ -31,11 +32,15 @@ interface Loaded extends stub.Plugin {
 	settings: Settings;
 	ensureServer(): Promise<string>;
 	refresh(): Promise<void>;
+	server: { ownsProcess: boolean };
 }
 const PluginClass = (require('./.build/main.cjs') as { default: new (app: unknown, m: unknown) => Loaded }).default;
 
-function makeApp(files: Record<string, string>, opts: { active?: stub.TFile; secrets?: Record<string, string> } = {}) {
+function makeApp(files: Record<string, string>, opts: {
+	active?: stub.TFile; secrets?: Record<string, string>; frontmatter?: Record<string, Record<string, unknown>>;
+} = {}) {
 	const fm: Record<string, unknown> = { read_count: 1, read_on: '2026-10-01' };
+	const links: [string, string][] = [];
 	const app = {
 		vault: {
 			configDir: '.obsidian',
@@ -46,13 +51,46 @@ function makeApp(files: Record<string, string>, opts: { active?: stub.TFile; sec
 			on: () => ({}),
 			getAbstractFileByPath: () => null,
 		},
-		workspace: { onLayoutReady: () => {}, getActiveFile: () => opts.active ?? null, getLeavesOfType: () => [] },
+		workspace: {
+			onLayoutReady: () => {}, getActiveFile: () => opts.active ?? null, getLeavesOfType: () => [],
+			openLinkText: async (name: string, from: string) => { links.push([name, from]); },
+		},
 		secretStorage: { getSecret: (id: string) => opts.secrets?.[id] ?? null },
 		fileManager: { processFrontMatter: async (_f: unknown, fn: (fm: Record<string, unknown>) => void) => fn(fm) },
-		metadataCache: { getFirstLinkpathDest: () => null },
+		metadataCache: {
+			getFirstLinkpathDest: () => null,
+			getCache: (path: string) => (opts.frontmatter?.[path] ? { frontmatter: opts.frontmatter[path] } : null),
+			on: () => ({}),
+		},
 	};
-	return { app, fm };
+	return { app, fm, links };
 }
+
+/** The site's answer to /api/standing on the demo vault, for the names it holds. */
+const DEMO_STANDING: Record<string, unknown> = {
+	collection: { note: 'Collection', state: 'granted', stands: true, layer: 0, to_stand: 0, of: 1 },
+	counting: { note: 'Counting', state: 'ready', stands: false, layer: 1, to_stand: 1, of: 2 },
+	'natural number': { note: 'Natural number', state: 'locked', stands: false, layer: 2, to_stand: 2, of: 3 },
+};
+function answerStanding(requests: string[] = []) {
+	stub.setRequestUrl(async (req) => {
+		requests.push(req.url);
+		const url = new URL(req.url);
+		if (url.pathname !== '/api/standing') return { status: 404, text: '{"error":"no such page"}' };
+		const out: Record<string, unknown> = {};
+		for (const n of url.searchParams.getAll('name')) if (DEMO_STANDING[n.toLowerCase()]) out[n] = DEMO_STANDING[n.toLowerCase()];
+		return { status: 200, text: JSON.stringify({ standing: out }) };
+	});
+	return requests;
+}
+const settle = () => new Promise((r) => setTimeout(r, 20));
+
+interface Api {
+	version: number;
+	status(names: unknown): Promise<Record<string, unknown>>;
+	open(action: string, concept: string): void;
+}
+interface Block extends stub.MarkdownRenderChild { draw(): Promise<void> }
 
 const learningRoad = { '.obsidian/plugins/vault-exam/manifest.json': '{"id":"vault-exam"}' };
 
@@ -70,6 +108,98 @@ test('the plugin loads and registers its commands, view, settings and status bar
 	assert.equal(p.settings.siteUrl, 'http://127.0.0.1:4190');
 	assert.equal(p.settings.readZones, '', 'no Learning Road, no zones: mark as read works anywhere');
 	assert.equal(p.settings.migrated, true);
+	assert.deepEqual(Object.keys(p.processors), ['knowledge-os'], 'the progress block');
+	assert.equal((p as unknown as { api: Api }).api.version, 1, 'the API other plugins call');
+	p.onunload();
+});
+
+test('the API gives the site\'s standing, never starts the site, and opens by action', async () => {
+	const { app } = makeApp({});
+	const p = new PluginClass(app, { id: 'knowledge-os' });
+	await p.onload();
+	const api = (p as unknown as { api: Api }).api;
+	const requests = answerStanding();
+	const got = await api.status(['Collection', 'counting', 'Nope', 7, ' ']);
+	assert.deepEqual(got, { Collection: DEMO_STANDING.collection, counting: DEMO_STANDING.counting });
+	assert.deepEqual(new URL(requests[0]!).searchParams.getAll('name'), ['Collection', 'counting', 'Nope']);
+	assert.deepEqual(await api.status('Collection'), {}, 'not a list: nothing asked');
+	assert.equal(requests.length, 1);
+
+	stub.setRequestUrl(null);
+	await assert.rejects(api.status(['Collection']), /not answering/);
+	assert.equal(p.server.ownsProcess, false, 'a read never starts the site');
+
+	const opened: string[] = [];
+	(p as unknown as { openRoute: (r: string) => void }).openRoute = (r) => opened.push(r);
+	api.open('check', 'Counting things');
+	api.open('teach', 'Counting');
+	api.open('place', 'Natural number');
+	api.open('explore', 'Stray idea');
+	api.open('delete', 'Counting');
+	api.open('check', '  ');
+	assert.deepEqual(opened, ['check?concept=Counting%20things', 'teach/Counting', 'place/Natural%20number', 'note/Stray%20idea']);
+	p.onunload();
+});
+
+test('the progress block draws what a chapter assumes and teaches, with its standing and buttons', async () => {
+	const path = 'Chapters/Counting in Practice - Chapter.md';
+	const { app, links } = makeApp({}, {
+		frontmatter: { [path]: { teaches: ['[[Natural number]]'], prerequisites: ['[[Collection]]', '[[Counting]]', '[[Stray idea]]'] } },
+	});
+	const p = new PluginClass(app, { id: 'knowledge-os' });
+	await p.onload();
+	answerStanding();
+	const el = new FakeEl('div');
+	const children: Block[] = [];
+	await p.processors['knowledge-os']!('progress\nteaches: teaches\nassumes: prerequisites\n', el,
+		{ sourcePath: path, addChild: (c: Block) => { children.push(c); c.load(); } });
+	await settle();
+	const text = el.allText();
+	assert.match(text, /What it assumes 1 of 3 stand/);
+	assert.match(text, /Collection Granted Counting Ready to check Check Teach me Stray idea Not on the road Explore/);
+	assert.match(text, /What it teaches 0 of 1 stand Natural number Locked 2 of 3 still to stand Teach me Place me/);
+
+	const opened: string[] = [];
+	(p as unknown as { openRoute: (r: string) => void }).openRoute = (r) => opened.push(r);
+	el.find((e) => e.tag === 'button' && e.text === 'Check')[0]!.click();
+	el.find((e) => e.tag === 'button' && e.text === 'Place me')[0]!.click();
+	assert.deepEqual(opened, ['check?concept=Counting', 'place/Natural%20number']);
+	el.find((e) => e.tag === 'a' && e.text === 'Collection')[0]!.click();
+	assert.deepEqual(links, [['Collection', path]]);
+
+	// the site goes away: the block says so and offers to start it, and the road's refresh redraws it
+	stub.setRequestUrl(null);
+	await p.refresh();
+	await settle();
+	assert.match(el.allText(), /The Knowledge OS is not running/);
+	assert.ok(el.find((e) => e.tag === 'button' && e.text === 'Start the site').length === 1);
+
+	// a site older than the plugin
+	stub.setRequestUrl(async () => ({ status: 404, text: '{"error":"no such page"}' }));
+	await children[0]!.draw();
+	assert.match(el.allText(), /older than this plugin/);
+
+	children[0]!.unload();
+	assert.equal((p as unknown as { blocks: Set<unknown> }).blocks.size, 0);
+	stub.setRequestUrl(null);
+	p.onunload();
+});
+
+test('a block that is not progress says what it draws, and asks the site nothing', async () => {
+	const { app } = makeApp({}, { frontmatter: { 'a.md': {} } });
+	const p = new PluginClass(app, { id: 'knowledge-os' });
+	await p.onload();
+	const requests = answerStanding();
+	const el = new FakeEl('div');
+	await p.processors['knowledge-os']!('road\n', el, { sourcePath: 'a.md', addChild: (c: Block) => c.load() });
+	await settle();
+	assert.match(el.allText(), /draws `progress`/);
+	const empty = new FakeEl('div');
+	await p.processors['knowledge-os']!('progress', empty, { sourcePath: 'a.md', addChild: (c: Block) => c.load() });
+	await settle();
+	assert.match(empty.allText(), /names no concepts in prerequisites.*names no concepts in teaches/);
+	assert.equal(requests.length, 0);
+	stub.setRequestUrl(null);
 	p.onunload();
 });
 

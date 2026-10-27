@@ -41,6 +41,7 @@ export class Plugin {
 	events: unknown[] = [];
 	domEvents: [unknown, string, (ev: unknown) => unknown][] = [];
 	bars: StatusBar[] = [];
+	processors: Record<string, (source: string, el: unknown, ctx: unknown) => unknown> = {};
 	data: unknown = null;
 	constructor(app: unknown, manifest: unknown) {
 		this.app = app;
@@ -61,6 +62,7 @@ export class Plugin {
 	registerEvent(e: unknown) { this.events.push(e); }
 	registerDomEvent(el: unknown, type: string, cb: (ev: unknown) => unknown) { this.domEvents.push([el, type, cb]); }
 	registerInterval(id: number) { return id; }
+	registerMarkdownCodeBlockProcessor(lang: string, fn: (source: string, el: unknown, ctx: unknown) => unknown) { this.processors[lang] = fn; }
 	async loadData() { return this.data; }
 	async saveData(d: unknown) { this.data = JSON.parse(JSON.stringify(d)); }
 }
@@ -90,10 +92,31 @@ export class ItemView {
 	registerDomEvent() {}
 }
 
+/** A rendered block's lifetime: load() runs onload, unload() runs onunload, as a section's addChild does. */
+export class MarkdownRenderChild {
+	containerEl: unknown;
+	constructor(containerEl: unknown) {
+		this.containerEl = containerEl;
+	}
+	load() { this.onload(); }
+	unload() { this.onunload(); }
+	onload() {}
+	onunload() {}
+	registerEvent() {}
+	registerDomEvent() {}
+}
+
 export const notices: string[] = [];
 export class Notice {
 	constructor(msg: string) { notices.push(msg); }
 }
 export const Platform = { isDesktopApp: false, isWin: false, isMacOS: false };
 export const normalizePath = (p: string) => p.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
-export const requestUrl = async () => { throw new Error('no network in tests'); };
+/** No network in tests, unless a test answers for the site with setRequestUrl. */
+type Answer = (req: { url: string; method?: string }) => Promise<{ status: number; text: string }>;
+let answer: Answer | null = null;
+export const setRequestUrl = (fn: Answer | null) => { answer = fn; };
+export const requestUrl = async (req: { url: string; method?: string }) => {
+	if (!answer) throw new Error('no network in tests');
+	return answer(req);
+};

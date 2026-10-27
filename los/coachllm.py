@@ -92,14 +92,18 @@ def _short(v, limit: int) -> str:
 
 
 def lesson_prompt(subject: str, note: str, lines: list, requires: list, focus: str, lang: str,
-                  stuck_on: str = "") -> str:
-    """The lesson prompt; what the learner wrote and the note go in as data, their markers defused."""
+                  stuck_on: str = "", before: list | tuple = ()) -> str:
+    """The lesson prompt; what the learner wrote and the note go in as data, their markers defused. `before` is what
+    earlier coached sessions on this subject left (26 Oct 2026): the lesson builds on it rather than starting over."""
     clean = lambda t: str(t or "").replace("<<<", "< <<").replace(">>>", "> >>")
+    again = (" The learner has been coached on this before: " + "; ".join(clean(x) for x in before) + ". Build on "
+             "that: open by saying in one line what this lesson adds, start from what they missed or found shaky, and "
+             "do not repeat the lesson they took; use new examples and new questions.") if before else ""
     return LESSON_PROMPT.format(
         subject=clean(subject), lang=LANGS.get(lang, "English"),
         focus=(f" The learner is stuck on \"{clean(stuck_on)}\", which rests on this: teach just enough of it, in two "
                f"or three chunks, to go back up." if stuck_on else
-               f" The learner asked about this, in their words: {clean(focus)}" if focus else ""),
+               f" The learner asked about this, in their words: {clean(focus)}" if focus else "") + again,
         lines="\n".join(f"- {clean(x)}" for x in lines) or "- (nothing said yet)",
         note=clean(body_of(note))[:NOTE_CHARS], requires="\n".join(f"- {clean(x)}" for x in requires) or "- (nothing)")
 
@@ -247,3 +251,40 @@ def reflection_of(v: dict) -> dict:
         if isinstance(v.get("missing"), list) else []
     return {"grade": v.get("grade") if v.get("grade") in ("solid", "shaky") else "",
             "refinement": _short(v.get("refinement"), 300), "missing": missing, "propose": _short(v.get("propose"), 200)}
+
+
+WORDS_PROMPT = """The learner passed the check on "{subject}" and wrote one sentence, in their own words, of what it lets
+them do. Say whether the sentence is correct, judged against the note and established knowledge, in {lang}.
+
+THE NOTE, between the markers:
+<<<NOTE
+{note}
+NOTE>>>
+
+THE LEARNER'S SENTENCE, between the markers:
+<<<SENTENCE
+{sentence}
+SENTENCE>>>
+
+Rules:
+- "verdict": "right" when the sentence says something true about the idea, in any words, short is fine; "partly" when
+  it is true but misses or blurs what matters most; "wrong" when it says something false or is about another idea.
+- "fix": one sentence saying what is false or missing, so the learner can rewrite it themselves; "" when right. Never
+  write the sentence for them.
+- Write in {lang}.
+
+Reply with exactly: {{"verdict": "right|partly|wrong", "fix": "..."}}
+"""
+
+
+def words_prompt(subject: str, note: str, sentence: str, lang: str = "en") -> str:
+    """In my words, checked before it is kept (26 Oct 2026); the note and the sentence go in as data."""
+    clean = lambda t: str(t or "").replace("<<<", "< <<").replace(">>>", "> >>")
+    return WORDS_PROMPT.format(subject=clean(subject), lang=LANGS.get(lang, "English"),
+                               note=clean(body_of(note))[:NOTE_CHARS] or "(there is no note)", sentence=clean(sentence))
+
+
+def words_of(v: dict) -> dict:
+    v = v if isinstance(v, dict) else {}
+    verdict = v.get("verdict") if v.get("verdict") in ("right", "partly", "wrong") else ""
+    return {"verdict": verdict, "fix": "" if verdict == "right" else _short(v.get("fix"), 300)}

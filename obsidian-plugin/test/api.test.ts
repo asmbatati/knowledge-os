@@ -34,6 +34,20 @@ test('errors carry the site\'s own message, and a dead site says where it was lo
 	await assert.rejects(dead.today(), (e: unknown) => e instanceof ApiError && e.status === 0 && /127\.0\.0\.1:4190/.test(e.message));
 });
 
+test('standing asks for each name once, in one read, and none for no names', async () => {
+	const answer = { standing: { 'Kalman Filter': { note: 'Kalman Filter', state: 'ready', stands: false, layer: 4, to_stand: 1, of: 9 } } };
+	const http = scripted([(req, url) => (url.pathname === '/api/standing' ? response(200, answer) : undefined)]);
+	const c = new KnowledgeClient('http://127.0.0.1:4190', http);
+	assert.deepEqual(await c.standing(['Kalman Filter', 'A & B', 'Kalman Filter']), answer.standing);
+	const url = new URL(http.calls[0]!.url);
+	assert.deepEqual(url.searchParams.getAll('name'), ['Kalman Filter', 'A & B']);
+	assert.equal(http.calls[0]!.method ?? 'GET', 'GET');
+	assert.deepEqual(await c.standing([]), {});
+	assert.equal(http.calls.length, 1, 'no names, no request');
+	const old = new KnowledgeClient('http://127.0.0.1:4190', scripted([]));
+	await assert.rejects(old.standing(['x']), (e: unknown) => e instanceof ApiError && e.status === 404);
+});
+
 test('pages are framed for a tab and plain for the browser', () => {
 	assert.equal(pageUrl('http://127.0.0.1:4190/', 'today', true), 'http://127.0.0.1:4190/?embed=1#/today');
 	assert.equal(pageUrl('http://127.0.0.1:4190', '#/settings', false), 'http://127.0.0.1:4190/#/settings');

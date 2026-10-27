@@ -8,6 +8,7 @@ import { typeset } from "../typeset.js";
 import { labFor } from "../lab/registry.js";
 import { figureCards } from "../lab/figure-card.js";
 import { embedded, openInObsidian } from "../embed.js";
+import { startSession } from "./study.js";
 
 export async function render(main, params, ctx) {
   const { t } = ctx;
@@ -34,6 +35,19 @@ export async function render(main, params, ctx) {
   } }, t("concept.read"));
   const readNote = h("span", { class: "meta" }, c.read_on_site ? t("concept.readon", { date: fmtDate(c.read_on_site, lang) }) : "");
   const canCheck = c.in_graph && (c.status === "ready" || c.status === "to-read");
+  // a coached session on this concept, as Today's "Teach me" starts one on a named topic (26 Oct 2026)
+  const coachBtn = h("button", { class: canCheck ? "" : "primary", type: "button", onclick: async () => {
+    coachBtn.disabled = true;
+    try { await startSession(ctx, "named", c.name); }
+    catch (e) { toast(e.message); coachBtn.disabled = false; }
+  } }, t(c.coached ? "concept.coach.again" : "concept.coach"));
+  // what the coach has done on this concept: practice, never a verdict, so it stands apart from the road's history
+  const cz = c.coached;
+  const coached = cz ? [h("h4", {}, t("concept.coached")), h("ul", { class: "plain" },
+    h("li", {}, t("concept.coached.n", { n: cz.sessions, date: fmtDate(cz.last, lang) })),
+    cz.asked ? h("li", {}, t("concept.coached.q", { right: cz.right, asked: cz.asked })) : null,
+    cz.grade ? h("li", {}, t("concept.coached.tb", { grade: t("study." + cz.grade) })) : null,
+    cz.refinement ? h("li", { class: "meta", dir: "auto" }, t("study.refine"), " ", cz.refinement) : null)] : null;
   const lab = labFor(c.name);
 
   const side = h("aside", { class: "card side" },
@@ -51,6 +65,7 @@ export async function render(main, params, ctx) {
         h("li", {}, h("span", { class: r.passed ? "ok" : "bad" }, r.passed ? "✓" : "✗"), " ",
           `${t("kind." + r.kind)} · ${fmtDate(r.date, lang)}`)))] : null,
     ] : null,
+    coached,
     lab.length ? [h("h4", {}, "🔬 ", t("concept.lab")), h("div", { class: "chips" }, lab.map((x) =>
       h("a", { class: "chip-link lab", href: `#/lab/${x.kind}/${x.id}` },
         x.kind === "figures" ? `${t("lab.figure.kind")} · ${t("lab.f." + x.id)}`
@@ -58,6 +73,7 @@ export async function render(main, params, ctx) {
     h("div", { class: "row wrap actions" }, readBtn,
       embedded() ? h("button", { class: "ghost", onclick: () => openInObsidian(c.name) }, t("concept.obsidian")) : null,
       canCheck ? h("a", { class: "button primary", href: "#/check?concept=" + encodeURIComponent(c.name) }, t("concept.check")) : null,
+      coachBtn,
       h("a", { class: "button ghost", href: "#/teach/" + encodeURIComponent(c.name) }, t("teach.this"))),
     readNote);
 
